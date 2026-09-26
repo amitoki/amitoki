@@ -44,7 +44,7 @@ class ArchiveTests(unittest.TestCase):
             binary = Path(temporary) / "amitoki"
             binary.write_bytes(b"\x7fELF\x02\x01" + bytes(12) + (183).to_bytes(2, "little"))
             with patch.object(metadata, "output") as execute, self.assertRaises(ValueError):
-                metadata.verify_binary(binary, "x86_64-unknown-linux-gnu", "0.4.0")
+                metadata.verify_binary(binary, "x86_64-unknown-linux-gnu", metadata.version())
             execute.assert_not_called()
 
     def test_tampered_distribution_stops_verification(self):
@@ -77,7 +77,7 @@ class PublishingTests(unittest.TestCase):
                 patch.object(publish, "verify_target", return_value=""), \
                 patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":false}')) as run:
             with self.assertRaisesRegex(ValueError, "公開済み"):
-                publish.publish(Path(temporary), "v0.4.0", "example/repository")
+                publish.publish(Path(temporary), f"v{metadata.version()}", "example/repository")
             self.assertEqual(run.call_count, 1)
             self.assertEqual(run.call_args.args[0][:3], ["gh", "release", "view"])
 
@@ -89,7 +89,7 @@ class PublishingTests(unittest.TestCase):
                 patch.object(publish, "output", return_value=json.dumps({"assets": []})), \
                 patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":true}')) as run:
             with self.assertRaisesRegex(ValueError, "draft"):
-                publish.publish(Path(temporary), "v0.4.0", "example/repository")
+                publish.publish(Path(temporary), f"v{metadata.version()}", "example/repository")
             commands = [call.args[0] for call in run.call_args_list]
             self.assertTrue(any("upload" in command for command in commands))
             self.assertFalse(any("--draft=false" in command for command in commands))
@@ -103,7 +103,7 @@ class PublishingTests(unittest.TestCase):
                 patch.object(publish, "digest", return_value="hash"), \
                 patch.object(publish, "output", return_value=json.dumps(uploaded)), \
                 patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":true}')) as run:
-            publish.publish(Path(temporary), "v0.4.0", "example/repository")
+            publish.publish(Path(temporary), f"v{metadata.version()}", "example/repository")
             self.assertIn("--draft=false", run.call_args.args[0])
 
 

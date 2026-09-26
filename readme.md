@@ -2,7 +2,7 @@
 
 ネットワークの解析・デバッグ・通信実験に使うRust製ツール。Ethernetフレームを解析・フィルタリングし、設定で選んだ中継方式を通して別ノードへ送る。PostgreSQL・P2Pは外部プロセス型プラグインとして追加する。本体の再ビルドは不要。メモリ中継は同一プロセス内のテスト用として組み込んでいる。
 
-0.4.0では解析・フィルタも外部ブロックとして作成し、複数の中継先へ分岐できる。[ブロック構成の設計・使い方](docs/block-pipelines.md)と[設定例](amitoki.pipeline.example.toml)を参照する。
+0.1.0では解析・フィルタも外部ブロックとして作成し、複数の中継先へ分岐できる。[ブロック構成の設計・使い方](docs/block-pipelines.md)と[設定例](amitoki.pipeline.example.toml)を参照する。
 
 種類別CLI、GitHub URL・ディレクトリからの追加、PCAPでの単体テスト・経路トレース・結果比較・変更監視は[プラグイン開発とデバッグ](docs/plugin-development.md)を参照する。
 
@@ -134,4 +134,4 @@ VMで起動から通信まで確認する場合は[3台のVMによるテスト�
 
 旧`packets`と`processed_packets`からの自動移行は行わない。新しい`stegrdb_relay`スキーマを作り、相手ノードも同じ版へそろえる。保存された時刻間隔を再現する待機もなくし、取得できたフレームから順に送る。旧IDPS専用ログ設定は使わず、標準エラーのログと終了時の集計を見る。
 
-0.2の組み込みPostgreSQLから移行する場合は、`plugin relay add https://github.com/amitoki/amitoki-plugin-postgres`でプラグインを追加する。接続設定とDBスキーマはそのまま使える。0.3の本体は常にPostgreSQLへ依存せずにビルドされる。
+PostgreSQLを組み込んでいたstegrdbから移行する場合は、`plugin relay add https://github.com/amitoki/amitoki-plugin-postgres`でプラグインを追加する。接続設定とDBスキーマはそのまま使える。amitoki本体はPostgreSQLに依存せずにビルドされる。

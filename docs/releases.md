@@ -6,17 +6,17 @@
 
 ## 公開版をインストールする
 
-[GitHub Releases](https://github.com/amitoki/amitoki/releases)から、使用するCPUに合うファイルと`SHA256SUMS`を取得する。以下はv0.4.0の公開後に使うインストール例。GitHub CLIを入れたUbuntu/Debianのターミナルで実行する。
+[GitHub Releases](https://github.com/amitoki/amitoki/releases)から、使用するCPUに合うファイルと`SHA256SUMS`を取得する。以下はv0.1.0のインストール例。GitHub CLIを入れたUbuntu/Debianのターミナルで実行する。
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y gh ca-certificates
 mkdir -p amitoki-download
 cd amitoki-download
-gh release download v0.4.0 --repo amitoki/amitoki \
-  --pattern 'amitoki_0.4.0_amd64.deb' --pattern SHA256SUMS
+gh release download v0.1.0 --repo amitoki/amitoki \
+  --pattern 'amitoki_0.1.0_amd64.deb' --pattern SHA256SUMS
 sha256sum --ignore-missing --check SHA256SUMS
-sudo apt-get install -y ./amitoki_0.4.0_amd64.deb
+sudo apt-get install -y ./amitoki_0.1.0_amd64.deb
 amitoki --version
 ```
 
@@ -35,14 +35,14 @@ amitoki --config ./amitoki.toml
 sudo apt-get remove amitoki
 ```
 
-実行ファイルだけを使う場合は、`amitoki-0.4.0-x86_64-unknown-linux-gnu.tar.gz`を取得・SHA256確認して展開する。ARM64では`aarch64-unknown-linux-gnu`を選ぶ。
+実行ファイルだけを使う場合は、`amitoki-0.1.0-x86_64-unknown-linux-gnu.tar.gz`を取得・SHA256確認して展開する。ARM64では`aarch64-unknown-linux-gnu`を選ぶ。
 
 ```bash
-gh release download v0.4.0 --repo amitoki/amitoki \
-  --pattern 'amitoki-0.4.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS --clobber
+gh release download v0.1.0 --repo amitoki/amitoki \
+  --pattern 'amitoki-0.1.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS --clobber
 sha256sum --ignore-missing --check SHA256SUMS
-tar -xzf amitoki-0.4.0-x86_64-unknown-linux-gnu.tar.gz
-./amitoki-0.4.0-x86_64-unknown-linux-gnu/amitoki --version
+tar -xzf amitoki-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+./amitoki-0.1.0-x86_64-unknown-linux-gnu/amitoki --version
 ```
 
 `SHA256SUMS`はファイルの破損・取り違えを検出するためのもの。配布元の真正性はGitHubリポジトリとHTTPSを信頼する。tar.gzの`build-info.json`とdebの`/usr/share/doc/amitoki/build-info.json`でソースcommit・版・CPU・Rust版・本体のSHA256を確認できる。
@@ -91,8 +91,8 @@ git switch main
 git pull --ff-only
 git status --short
 # 出力が空であることと、対象commitのCI成功を確認してから実行する。
-git tag -a v0.4.0 -m 'amitoki 0.4.0を公開'
-git push origin v0.4.0
+git tag -a v0.1.0 -m 'amitoki 0.1.0を公開'
+git push origin v0.1.0
 ```
 
 タグのCIは再度ビルド・テストし、draftのReleaseへ4配布物と`SHA256SUMS`をアップロードする。GitHub上のファイル名・SHA256が全部一致したら公開する。途中で失敗したdraftは、原因を修正したうえで同じワークフローを再実行できる。公開済み版は上書きしない。コード修正が必要なら新しい版を作る。

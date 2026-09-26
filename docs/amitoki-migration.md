@@ -6,7 +6,7 @@ amitoki（あみとき）は、ネットワークの解析・デバッグ・通�
 
 | 用途 | 公開リポジトリ | amitoki名の配布版 |
 |---|---|---|
-| 本体・共通SDK | https://github.com/amitoki/amitoki | 本体0.3.0 |
+| 本体・共通SDK | https://github.com/amitoki/amitoki | 本体v0.1.0 |
 | PostgreSQL | https://github.com/amitoki/amitoki-plugin-postgres | v0.1.2 |
 | P2P・接続情報交換サーバ | https://github.com/amitoki/amitoki-plugin-p2p | v0.1.1 |
 
