@@ -1,4 +1,5 @@
 //! 同一プロセス内で使う有限長の参照実装。外部サービスやグローバル状態は使わない。
+use amitoki_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError, RelayPlugin};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::Value;
@@ -6,7 +7,6 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex, MutexGuard},
 };
-use stegrdb_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError, RelayPlugin};
 use uuid::Uuid;
 
 // テストで保持可能な上限。満杯時は消さずにバックプレッシャを返す。

@@ -1,4 +1,6 @@
 use super::{package::read_options, ManagerResult, Package};
+use amitoki_plugin_sdk::ProcessRelay;
+use amitoki_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError};
 use async_trait::async_trait;
 use fs2::FileExt;
 use serde_json::Value;
@@ -8,20 +10,18 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use stegrdb_plugin_sdk::ProcessRelay;
-use stegrdb_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError};
 
 pub struct PluginStore {
     pub directory: PathBuf,
 }
 impl PluginStore {
     pub fn from_environment() -> ManagerResult<Self> {
-        let directory = if let Some(path) = std::env::var_os("STEGRDB_PLUGIN_DIR") {
+        let directory = if let Some(path) = std::env::var_os("AMITOKI_PLUGIN_DIR") {
             PathBuf::from(path)
         } else if let Some(path) = std::env::var_os("XDG_DATA_HOME") {
-            PathBuf::from(path).join("stegrdb/plugins")
+            PathBuf::from(path).join("amitoki/plugins")
         } else {
-            PathBuf::from(std::env::var_os("HOME").ok_or("HOMEまたはSTEGRDB_PLUGIN_DIRを設定してください")?).join(".local/share/stegrdb/plugins")
+            PathBuf::from(std::env::var_os("HOME").ok_or("HOMEまたはAMITOKI_PLUGIN_DIRを設定してください")?).join(".local/share/amitoki/plugins")
         };
         Ok(Self { directory })
     }

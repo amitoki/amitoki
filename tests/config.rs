@@ -1,8 +1,8 @@
-use stegrdb::{config::AppConfig, engine::EngineConfig};
+use amitoki::{config::AppConfig, engine::EngineConfig};
 
 #[test]
 fn example_configuration_loads_without_database_credentials() {
-    let config = AppConfig::load(std::path::Path::new("stegrdb.example.toml")).unwrap();
+    let config = AppConfig::load(std::path::Path::new("amitoki.example.toml")).unwrap();
     assert_eq!(config.relay.plugin, "postgres");
     assert_eq!(config.engine.batch_size, 128);
 }

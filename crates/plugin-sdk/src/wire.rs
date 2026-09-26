@@ -1,8 +1,8 @@
 use crate::PluginManifest;
+use amitoki_relay::{Delivery, Frame, Receipt, RelayContext, RelayError};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::io;
-use stegrdb_relay::{Delivery, Frame, Receipt, RelayContext, RelayError};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 // 最大Ethernetフレーム128件とメタデータを、際限なく確保せずに扱う。

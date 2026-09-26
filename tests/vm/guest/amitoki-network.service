@@ -1,0 +1,12 @@
+[Unit]
+Description=amitoki test LAN inside this VM
+Before=amitoki.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /opt/amitoki-lab/network.sh start
+ExecStop=/bin/bash /opt/amitoki-lab/network.sh stop
+
+[Install]
+WantedBy=multi-user.target

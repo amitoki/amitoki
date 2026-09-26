@@ -4,7 +4,7 @@ mod manifest;
 mod server;
 pub mod wire;
 
+pub use amitoki_relay as relay;
 pub use client::ProcessRelay;
 pub use manifest::{PluginManifest, PROTOCOL_VERSION};
 pub use server::serve;
-pub use stegrdb_relay as relay;

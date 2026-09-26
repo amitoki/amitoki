@@ -1,4 +1,4 @@
-use stegrdb::{
+use amitoki::{
     firewall::{Filter, Firewall, Policy},
     packet::{parse_frame, PacketError},
 };

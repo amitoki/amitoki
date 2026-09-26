@@ -1,6 +1,6 @@
 [submodule "plugins/postgres"]
 	path = plugins/postgres
-	url = https://github.com/aida0710/stegrdb-plugin-postgres.git
+	url = https://github.com/amitoki/amitoki-plugin-postgres.git
 [submodule "plugins/p2p"]
 	path = plugins/p2p
-	url = https://github.com/aida0710/stegrdb-plugin-p2p.git
+	url = https://github.com/amitoki/amitoki-plugin-p2p.git

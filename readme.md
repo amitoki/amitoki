@@ -1,8 +1,10 @@
-# stegrdb
+# amitoki（あみとき）
 
-Ethernetフレームを、設定で選んだ中継方式を通して別ノードへ送るRust製クライアント。PostgreSQL・P2Pは外部プロセス型プラグインとして追加する。本体の再ビルドは不要。メモリ中継は同一プロセス内のテスト用として組み込んでいる。
+ネットワークの解析・デバッグ・通信実験に使うRust製ツール。Ethernetフレームを解析・フィルタリングし、設定で選んだ中継方式を通して別ノードへ送る。PostgreSQL・P2Pは外部プロセス型プラグインとして追加する。本体の再ビルドは不要。メモリ中継は同一プロセス内のテスト用として組み込んでいる。
 
 Linux向け。まず以下の手順でビルドと設定を済ませる。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。
+
+[stegrdbのfeat/relay-plugins](https://github.com/aida0710/stegrdb/tree/feat/relay-plugins)の履歴を引き継いだ独立プロジェクト。名前は「網＋解き」。移行手順は[amitokiへの移行](docs/amitoki-migration.md)を参照する。
 
 ## ビルドする
 
@@ -10,54 +12,53 @@ Ubuntu/Debianで必要なツールを入れる。Rustの導入方法は[rustup�
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential curl ca-certificates libcap2-bin postgresql-client python3
+sudo apt-get install -y build-essential git curl ca-certificates libcap2-bin postgresql-client python3
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
 . "$HOME/.cargo/env"
 rustup component add rustfmt clippy
-cargo build --release --bin stegrdb --locked
+git clone https://github.com/amitoki/amitoki.git
+cd amitoki
+cargo build --release --bin amitoki --locked
 ```
 
 `./setup.sh`でも設定ファイルの作成とreleaseビルドを行える。既存の設定ファイルを上書きしない。
 
 ## プラグインを追加する
 
-PostgreSQLとP2Pは所有者のprivateリポジトリで開発し、本体からsubmoduleとして参照する。本体だけのビルド・試験にはsubmoduleの取得は不要。開発・VM試験で使う場合は、GitHubの権限があるアカウントで取得する。
+PostgreSQLとP2Pはamitoki Organizationの公開リポジトリで開発し、本体からsubmoduleとして参照する。本体だけのビルド・試験にはsubmoduleの取得は不要。開発・VM試験で使う場合は次で取得する。
 
 ```bash
 git submodule update --init --recursive
 ```
 
-利用時はGitとRustを使わず、GitHub Releaseのビルド済み配布物を追加できる。privateリポジトリのContents読み取り権限を持つトークンを入力する。
+利用時はプラグインのソース取得やビルドをせず、GitHub Releaseの配布物を追加できる。公式プラグインは公開されているため、GitHubトークンは不要。
 
 ```bash
-read -r -s -p 'GitHubトークン: ' STEGRDB_GITHUB_TOKEN
-printf '\n'
-export STEGRDB_GITHUB_TOKEN
-./target/release/stegrdb plugin add postgres
-./target/release/stegrdb plugin add p2p
-./target/release/stegrdb plugin list
-./target/release/stegrdb plugin describe postgres
-./target/release/stegrdb plugin configure postgres --set max_connections=4
-./target/release/stegrdb plugin validate postgres
+./target/release/amitoki plugin add postgres
+./target/release/amitoki plugin add p2p
+./target/release/amitoki plugin list
+./target/release/amitoki plugin describe postgres
+./target/release/amitoki plugin configure postgres --set max_connections=4
+./target/release/amitoki plugin validate postgres
 ```
 
-`configure postgres`だけなら対話設定になる。環境変数名には`STEGRDB_POSTGRES_URL`、接続数には`4`、初回再生期間には`4000`を入力するか、空欄で既定値を使う。秘密情報の値は入力せず、参照する環境変数名を指定する。
+`configure postgres`だけなら対話設定になる。環境変数名には`AMITOKI_POSTGRES_URL`、接続数には`4`、初回再生期間には`4000`を入力するか、空欄で既定値を使う。秘密情報の値は入力せず、参照する環境変数名を指定する。
 
-保存先は`$XDG_DATA_HOME/stegrdb/plugins`、未設定なら`~/.local/share/stegrdb/plugins`。サービス用には`STEGRDB_PLUGIN_DIR`で共通の場所を指定する。CLIの`--directory`はその操作に限った指定なので、サービス起動にも同じ場所を設定する。プラグインの設定は`.config/<名前>.json`へ権限0600で保存し、`[relay.options]`の項目で上書きできる。
+保存先は`$XDG_DATA_HOME/amitoki/plugins`、未設定なら`~/.local/share/amitoki/plugins`。サービス用には`AMITOKI_PLUGIN_DIR`で共通の場所を指定する。CLIの`--directory`はその操作に限った指定なので、サービス起動にも同じ場所を設定する。プラグインの設定は`.config/<名前>.json`へ権限0600で保存し、`[relay.options]`の項目で上書きできる。
 
 ```bash
-./target/release/stegrdb plugin update p2p
-./target/release/stegrdb plugin remove p2p
-./target/release/stegrdb plugin add --path ./dist/postgres
+./target/release/amitoki plugin update p2p
+./target/release/amitoki plugin remove p2p
+./target/release/amitoki plugin add --path ./dist/postgres
 ```
 
 設定の保存・更新・削除は対象の中継を停止してから行う。使用中の操作は拒否する。削除後も設定は保持する。更新は実行ファイルのSHA256、通信仕様、OS・CPU、保存済み設定を検証し、原子的に入れ替える。SHA256は破損検出であり、第三者署名ではない。取得先リポジトリと認証済みHTTPSを信頼境界とする。
 
-P2Pの鍵作成・接続設定・任意のNext.js接続情報交換サーバは[stegrdb-plugin-p2p](https://github.com/aida0710/stegrdb-plugin-p2p)のREADMEを参照する。
+P2Pの鍵作成・接続設定・任意のNext.js接続情報交換サーバは[amitoki-plugin-p2p](https://github.com/amitoki/amitoki-plugin-p2p)のREADMEを参照する。
 
 ## 中継先と対象ネットワークを設定する
 
-`stegrdb.example.toml`を`stegrdb.toml`へコピーする。各ノードで`node_id`を変え、中継相手とは同じ`channel`を指定する。`interface`には中継対象LANのインターフェースを指定する。DBへ接続するインターフェースは分ける。
+`amitoki.example.toml`を`amitoki.toml`へコピーする。各ノードで`node_id`を変え、中継相手とは同じ`channel`を指定する。`interface`には中継対象LANのインターフェースを指定する。DBへ接続するインターフェースは分ける。
 
 フィルタは規定で全拒否。必要な通信だけを`[firewall].rules`へ追加する。各ルールはOR条件で、送信側と受信側の両方で適用される。ARPを中継するには、IPのルールとは別に`EtherType`の2054を許可する。
 
@@ -71,14 +72,14 @@ rules = [
 ]
 ```
 
-PostgreSQLの接続情報は`STEGRDB_POSTGRES_URL`に設定する。接続文字列はlibpq形式またはPostgreSQL URIを使える。次の入力はターミナルへ表示されない。入力例の形式は`host=db.example.com user=stegrdb password=... dbname=stegrdb sslmode=require`。実際の接続先と認証情報へ置き換える。
+PostgreSQLの接続情報は`AMITOKI_POSTGRES_URL`に設定する。接続文字列はlibpq形式またはPostgreSQL URIを使える。次の入力はターミナルへ表示されない。入力例の形式は`host=db.example.com user=amitoki password=... dbname=amitoki sslmode=require`。実際の接続先と認証情報へ置き換える。
 
 ```bash
-read -r -s -p 'PostgreSQL接続文字列: ' STEGRDB_POSTGRES_URL
+read -r -s -p 'PostgreSQL接続文字列: ' AMITOKI_POSTGRES_URL
 printf '\n'
-export STEGRDB_POSTGRES_URL
-~/.local/share/stegrdb/plugins/postgres/stegrdb-plugin-postgres --schema > schema.sql
-psql "$STEGRDB_POSTGRES_URL" --set ON_ERROR_STOP=1 -f schema.sql
+export AMITOKI_POSTGRES_URL
+~/.local/share/amitoki/plugins/postgres/amitoki-plugin-postgres --schema > schema.sql
+psql "$AMITOKI_POSTGRES_URL" --set ON_ERROR_STOP=1 -f schema.sql
 ```
 
 初期化SQLはスキーマを作成できる権限で実行する。既存のパケットログ用テーブルは変更しない。実行時は専用スキーマへの必要な読み書き権限を持つユーザを使う。接続文字列は`.env`に保存してもよい。保存する場合は`chmod 600 .env`を適用する。
@@ -88,10 +89,10 @@ TLSでサーバ証明書とホスト名を確認する。プライベートCAを
 ## 設定を確認して起動する
 
 ```bash
-./target/release/stegrdb --list-plugins
-./target/release/stegrdb --config stegrdb.toml --check-config
-sudo setcap cap_net_raw=ep ./target/release/stegrdb
-./target/release/stegrdb --config stegrdb.toml
+./target/release/amitoki --list-plugins
+./target/release/amitoki --config amitoki.toml --check-config
+sudo setcap cap_net_raw=ep ./target/release/amitoki
+./target/release/amitoki --config amitoki.toml
 ```
 
 `--check-config`は共通設定と外部プラグインの設定スキーマを検証する。DBへの接続やインターフェースの存在は実行時に確認する。再ビルド後は実行ファイルのcapabilityを再設定する。
@@ -104,7 +105,7 @@ Ctrl+CまたはSIGTERMで収集を止め、保存待ちのフレームを送っ�
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-cargo test -p stegrdb --no-default-features --locked
+cargo test -p amitoki --no-default-features --locked
 cargo bench --bench packet_pipeline --locked
 ```
 

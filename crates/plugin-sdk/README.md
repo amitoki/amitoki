@@ -1,4 +1,4 @@
-# stegrdb-plugin-sdk
+# amitoki-plugin-sdk
 
 本体を再ビルドせずに中継方式を追加するためのRust SDK。プラグインは`serve`へ実装と`PluginManifest`を渡す。配布物はOS・CPU別の実行ファイルと設定定義を含むmanifestで、本体はRust ABIに依存しない。
 

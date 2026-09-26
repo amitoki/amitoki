@@ -1,8 +1,8 @@
 use super::ManagerResult;
+use amitoki_plugin_sdk::PluginManifest;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fs::File, io::Read, path::Path};
-use stegrdb_plugin_sdk::PluginManifest;
 
 // 配布物の破損や誤ったファイル指定で巨大なメモリ確保を行わない。
 pub const MAX_BINARY_BYTES: u64 = 128 * 1024 * 1024;
@@ -33,7 +33,7 @@ impl Package {
         if package.target != target() {
             return Err("このOS・CPU用のプラグインではありません".into());
         }
-        if package.binary != format!("stegrdb-plugin-{}", package.manifest.name) {
+        if package.binary != format!("amitoki-plugin-{}", package.manifest.name) {
             return Err("実行ファイル名が不正です".into());
         }
         Ok(package)

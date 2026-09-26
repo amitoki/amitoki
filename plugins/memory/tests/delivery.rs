@@ -1,7 +1,7 @@
+use amitoki_relay::{Frame, PluginRegistry, RelayContext};
+use amitoki_relay_memory::MemoryPlugin;
 use bytes::Bytes;
 use serde_json::json;
-use stegrdb_relay::{Frame, PluginRegistry, RelayContext};
-use stegrdb_relay_memory::MemoryPlugin;
 
 fn context(channel: &str, node: &str) -> RelayContext {
     RelayContext {

@@ -1,11 +1,11 @@
 use super::{retry::retry_operation, Engine, EngineError};
 use crate::packet::parse_frame;
+use amitoki_relay::{Delivery, RelayError};
 use log::warn;
 use std::{
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
-use stegrdb_relay::{Delivery, RelayError};
 use tokio::time::{sleep, timeout};
 use tokio_util::sync::CancellationToken;
 

@@ -2,10 +2,10 @@ use crate::{
     wire::{read_message, write_message, Request, Response, MAX_BATCH},
     PluginManifest, PROTOCOL_VERSION,
 };
+use amitoki_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::{path::Path, process::Stdio, time::Duration};
-use stegrdb_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError};
 use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
     sync::{mpsc, oneshot},

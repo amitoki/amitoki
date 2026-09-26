@@ -1,14 +1,14 @@
-use log::info;
-use std::{
-    path::PathBuf,
-    sync::{atomic::Ordering, Arc},
-};
-use stegrdb::{
+use amitoki::{
     config::AppConfig,
     engine::{Engine, EngineSettings},
     network::LinuxSocket,
     plugin_manager::{run_cli, PluginStore},
     plugins::builtin_plugins,
+};
+use log::info;
+use std::{
+    path::PathBuf,
+    sync::{atomic::Ordering, Arc},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -29,10 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if arguments == ["--help"] || arguments == ["-h"] {
-        println!("stegrdb [--config PATH] [--check-config]\nstegrdb --list-plugins\nstegrdb plugin --help");
+        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki plugin --help");
         return Ok(());
     }
-    let mut path = PathBuf::from("stegrdb.toml");
+    let mut path = PathBuf::from("amitoki.toml");
     let mut check_only = false;
     let mut arguments = arguments.iter();
     while let Some(argument) = arguments.next() {

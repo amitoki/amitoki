@@ -1,15 +1,15 @@
 [Unit]
-Description=stegrdb relay in the test VM
-Requires=stegrdb-network.service
-After=stegrdb-network.service network-online.target postgresql.service
+Description=amitoki relay in the test VM
+Requires=amitoki-network.service
+After=amitoki-network.service network-online.target postgresql.service
 Wants=network-online.target
 StartLimitIntervalSec=0
 
 [Service]
-User=stegrdb
-ExecStart=/opt/stegrdb-lab/stegrdb --config /opt/stegrdb-lab/stegrdb.toml
-Environment=STEGRDB_PLUGIN_DIR=/opt/stegrdb-lab/plugins
-EnvironmentFile=/opt/stegrdb-lab/postgres.env
+User=amitoki
+ExecStart=/opt/amitoki-lab/amitoki --config /opt/amitoki-lab/amitoki.toml
+Environment=AMITOKI_PLUGIN_DIR=/opt/amitoki-lab/plugins
+EnvironmentFile=/opt/amitoki-lab/postgres.env
 AmbientCapabilities=CAP_NET_RAW
 CapabilityBoundingSet=CAP_NET_RAW
 NoNewPrivileges=yes

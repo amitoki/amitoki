@@ -5,6 +5,6 @@ if ! command -v cargo >/dev/null; then
   echo "Rustをインストールしてください。手順はreadme.mdにあります。" >&2
   exit 1
 fi
-if [ ! -e stegrdb.toml ]; then cp stegrdb.example.toml stegrdb.toml; fi
+if [ ! -e amitoki.toml ]; then cp amitoki.example.toml amitoki.toml; fi
 cargo build --release --locked
-echo "stegrdb.tomlとDB接続情報を設定してください。起動手順はreadme.mdにあります。"
+echo "amitoki.tomlとDB接続情報を設定してください。起動手順はreadme.mdにあります。"

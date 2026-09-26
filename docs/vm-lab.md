@@ -1,6 +1,6 @@
 # 3台のVMで中継を試す
 
-`scripts/vm-lab up`でUbuntu 24.04のVMを3台作り、ビルドしたstegrdbを配備する。`scripts/vm-lab test`で、VMをまたぐICMP・TCP・UDPと、ノード停止中にDBへ蓄積したフレームの再配送を確認する。
+`scripts/vm-lab up`でUbuntu 24.04のVMを3台作り、ビルドしたamitokiを配備する。`scripts/vm-lab test`で、VMをまたぐICMP・TCP・UDPと、ノード停止中にDBへ蓄積したフレームの再配送を確認する。
 
 ホストはx86_64 Linux、Python 3.11以降、QEMU/KVMを使う。各VMは2vCPU・2GiBメモリ・12GiBの仮想ディスクを持つ。ディスクは差分形式なので、未使用領域の12GiBを最初から消費しない。
 
@@ -9,21 +9,21 @@
 ```mermaid
 flowchart LR
   subgraph A[VM a]
-    CA[client: 192.0.2.11] --- RA[relay0 / stegrdb]
+    CA[client: 192.0.2.11] --- RA[relay0 / amitoki]
     DB[(PostgreSQL 16)]
   end
   subgraph B[VM b]
-    CB[client: 192.0.2.12] --- RB[relay0 / stegrdb]
+    CB[client: 192.0.2.12] --- RB[relay0 / amitoki]
   end
   subgraph C[VM c]
-    CC[client: 192.0.2.13] --- RC[relay0 / stegrdb]
+    CC[client: 192.0.2.13] --- RC[relay0 / amitoki]
   end
   RA <--> DB
   RB <-->|制御用NIC| DB
   RC <-->|制御用NIC| DB
 ```
 
-各VM内の`client`はnetwork namespaceで、`client0`と`relay0`のvethだけにつながる。VM間を直接結ぶテスト用LANはないため、別VMのclientへ届くにはstegrdbの中継が必要になる。PostgreSQLモードはDB経由、P2PモードはQUICで直接送信する。制御用NICはSSH・パッケージ取得・DB/P2P接続に使う。
+各VM内の`client`はnetwork namespaceで、`client0`と`relay0`のvethだけにつながる。VM間を直接結ぶテスト用LANはないため、別VMのclientへ届くにはamitokiの中継が必要になる。PostgreSQLモードはDB経由、P2PモードはQUICで直接送信する。制御用NICはSSH・パッケージ取得・DB/P2P接続に使う。
 
 SSHのホスト側ポートは`127.0.0.1:22221`〜`22223`、DBは`127.0.0.1:25432`。P2PはホストのUDP `127.0.0.1:27441`〜`27443`から各ゲストの7443へ転送する。ポートが使用中なら起動時に失敗する。変更する場合は、ラボを停止して`tests/vm/settings.py`の値を変更する。
 
@@ -47,7 +47,7 @@ python3 --version
 cargo --version
 ```
 
-初回は約600MBのイメージ取得とVM内のパッケージ導入を行う。イメージは`~/.cache/stegrdb-vm/`、VMの状態はリポジトリ内の`.vm-lab/`に保存する。
+初回は約600MBのイメージ取得とVM内のパッケージ導入を行う。イメージは`~/.cache/amitoki-vm/`、VMの状態はリポジトリ内の`.vm-lab/`に保存する。
 
 ## 起動して通信を確かめる
 
@@ -77,8 +77,8 @@ P2P試験ではPostgreSQLを停止し、DBなしの直接通信を確認する�
 ```bash
 scripts/vm-lab ssh a
 # 以下はVM内で実行する
-sudo systemctl status stegrdb
-sudo journalctl -u stegrdb -f
+sudo systemctl status amitoki
+sudo journalctl -u amitoki -f
 sudo ip netns exec client ping 192.0.2.12
 ```
 
@@ -92,6 +92,6 @@ scripts/vm-lab destroy  # このラボのVM・ディスク・専用鍵を削除
 
 `destroy`後も、ダウンロードしたイメージと試験記録は残る。OSの起動に失敗した場合は`.vm-lab/<a|b|c>/serial.log`を確認する。cloud-initの待機期限は10分。パッケージ導入などに失敗したVMは、SSHで原因を確認するか`destroy`後に作り直す。
 
-専用SSH鍵、P2Pのノード別秘密鍵、ランダム生成したDBパスワードは`.vm-lab/`だけへ保存し、Gitから除外する。DB接続はこのローカルラボでは暗号化しない。VM内のstegrdbは専用ユーザで動き、raw socketに必要な`CAP_NET_RAW`だけを付ける。
+専用SSH鍵、P2Pのノード別秘密鍵、ランダム生成したDBパスワードは`.vm-lab/`だけへ保存し、Gitから除外する。DB接続はこのローカルラボでは暗号化しない。VM内のamitokiは専用ユーザで動き、raw socketに必要な`CAP_NET_RAW`だけを付ける。
 
 この試験ではvethのchecksum・GSOオフロードを無効にする。raw socketで転送するフレームの内容を検証するための設定であり、物理NICやオフロード有効時の検証は別途必要。処理件数を絞った機能試験なので、この結果を最大帯域の測定値としては扱わない。

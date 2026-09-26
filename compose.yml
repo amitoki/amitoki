@@ -14,7 +14,7 @@ services:
       - cargo-cache:/usr/local/cargo/registry
       - target-cache:/usr/src/app/target
     cap_add: [NET_RAW]
-    command: ["cargo", "run", "--locked", "--", "--config", "stegrdb.toml"]
+    command: ["cargo", "run", "--locked", "--", "--config", "amitoki.toml"]
 
 volumes:
   cargo-cache:

@@ -1,7 +1,7 @@
 target
 .git
 .env*
-stegrdb.toml
+amitoki.toml
 artifacts
 *.log
 .vm-lab
@@ -10,3 +10,6 @@ __pycache__
 plugins/postgres
 plugins/p2p
 **/.git
+
+# 旧名の接続設定も公開しない。
+stegrdb.toml

@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "stegrdb plugin", about = "中継プラグインを再ビルドせずに管理する")]
+#[command(name = "amitoki plugin", about = "中継プラグインを再ビルドせずに管理する")]
 struct Arguments {
     #[arg(long, global = true)]
     directory: Option<PathBuf>,
@@ -43,7 +43,7 @@ enum Operation {
 }
 
 pub async fn run_cli(arguments: &[String]) -> ManagerResult<()> {
-    let arguments = Arguments::parse_from(std::iter::once("stegrdb plugin".to_owned()).chain(arguments.iter().cloned()));
+    let arguments = Arguments::parse_from(std::iter::once("amitoki plugin".to_owned()).chain(arguments.iter().cloned()));
     let store = match arguments.directory {
         Some(directory) => PluginStore { directory },
         None => PluginStore::from_environment()?,

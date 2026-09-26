@@ -2,8 +2,11 @@
 .env
 .env.development
 .env.production
-/stegrdb.toml
+/amitoki.toml
 /artifacts/
 *.log
 /.vm-lab/
 __pycache__/
+
+# 旧名の接続設定も公開しない。
+/stegrdb.toml

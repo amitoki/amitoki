@@ -1,8 +1,8 @@
 use super::{Engine, EngineError};
 use crate::packet::parse_frame;
+use amitoki_relay::{Frame, MAX_FRAME_SIZE};
 use bytes::Bytes;
 use std::sync::{atomic::Ordering, Arc};
-use stegrdb_relay::{Frame, MAX_FRAME_SIZE};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 

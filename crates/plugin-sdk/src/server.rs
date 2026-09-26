@@ -2,8 +2,8 @@ use crate::{
     wire::{read_message, write_message, Request, Response, MAX_BATCH},
     PluginManifest, PROTOCOL_VERSION,
 };
+use amitoki_relay::{Relay, RelayError, RelayPlugin};
 use std::{io, sync::Arc};
-use stegrdb_relay::{Relay, RelayError, RelayPlugin};
 
 pub async fn serve(plugin: impl RelayPlugin, manifest: PluginManifest) -> Result<(), Box<dyn std::error::Error>> {
     manifest.validate()?;

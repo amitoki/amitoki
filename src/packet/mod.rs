@@ -3,8 +3,8 @@ mod ipv6;
 mod metadata;
 mod transport;
 
+use amitoki_relay::{MAX_FRAME_SIZE, MIN_FRAME_SIZE};
 pub use metadata::{MacAddress, PacketMetadata};
-use stegrdb_relay::{MAX_FRAME_SIZE, MIN_FRAME_SIZE};
 
 // IEEE 802.1Q/802.1adの二重タグまでを許可し、解析時間の上限を固定する。
 const MAX_VLAN_TAGS: usize = 2;

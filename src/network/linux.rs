@@ -1,11 +1,11 @@
 use super::PacketIo;
+use amitoki_relay::{MAX_FRAME_SIZE, MIN_FRAME_SIZE};
 use async_trait::async_trait;
 use std::{
     ffi::CString,
     io, mem,
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
 };
-use stegrdb_relay::{MAX_FRAME_SIZE, MIN_FRAME_SIZE};
 use tokio::io::{unix::AsyncFd, Interest};
 
 // LinuxのETH_P_ALL。バインド時はネットワークバイト順で渡す。

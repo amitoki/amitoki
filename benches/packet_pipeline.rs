@@ -1,8 +1,8 @@
-use std::{hint::black_box, time::Instant};
-use stegrdb::{
+use amitoki::{
     firewall::{Firewall, Policy},
     packet::parse_frame,
 };
+use std::{hint::black_box, time::Instant};
 
 // 単発の実行時間の揺れを抑えるため、同じ入力で100万回測る。
 const ITERATIONS: u32 = 1_000_000;

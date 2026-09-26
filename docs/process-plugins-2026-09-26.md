@@ -1,3 +1,5 @@
+> この文書はstegrdb開発時の記録。現在の配置・名称は[amitokiへの移行](amitoki-migration.md)を参照。
+
 # 外部プラグインとP2Pの実装・検証（2026-09-26）
 
 本体0.3は、中継方式を独立した実行ファイルとして追加する。PostgreSQLとP2Pはaida0710所有のprivateリポジトリへ分離し、本体からsubmoduleでコミットを固定する。本体のmainは変更せず、feat/relay-pluginsで開発した。

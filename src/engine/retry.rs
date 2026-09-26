@@ -1,7 +1,7 @@
 use super::{EngineConfig, Metrics};
+use amitoki_relay::RelayError;
 use log::warn;
 use std::{future::Future, sync::atomic::Ordering};
-use stegrdb_relay::RelayError;
 use tokio::time::{sleep, timeout};
 
 pub(super) async fn retry_operation<F, Operation>(operation: F, config: &EngineConfig, metrics: &Metrics) -> Result<(), RelayError>

@@ -1,10 +1,10 @@
 //! プロセス通信のキャンセル・クラッシュ検証用。配布用プラグインではない。
+use amitoki_plugin_sdk::{PluginManifest, PROTOCOL_VERSION};
+use amitoki_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError, RelayPlugin};
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
-use stegrdb_plugin_sdk::{PluginManifest, PROTOCOL_VERSION};
-use stegrdb_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError, RelayPlugin};
 
 struct Fixture;
 #[async_trait]
@@ -53,5 +53,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string(&manifest)?);
         return Ok(());
     }
-    stegrdb_plugin_sdk::serve(Fixture, manifest).await
+    amitoki_plugin_sdk::serve(Fixture, manifest).await
 }

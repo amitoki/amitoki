@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / ".vm-lab"
-CACHE = Path.home() / ".cache/stegrdb-vm"
+CACHE = Path.home() / ".cache/amitoki-vm"
 NODES = ("a", "b", "c")
 SSH_PORTS = {"a": 22221, "b": 22222, "c": 22223}
 DATABASE_PORT = 25432

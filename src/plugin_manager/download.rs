@@ -26,8 +26,8 @@ struct Asset {
 pub async fn download(source: &str) -> ManagerResult<tempfile::TempDir> {
     let (repository, version) = source.split_once('@').map_or((source, None), |(repository, version)| (repository, Some(version)));
     let repository = match repository {
-        "postgres" => "aida0710/stegrdb-plugin-postgres",
-        "p2p" => "aida0710/stegrdb-plugin-p2p",
+        "postgres" => "amitoki/amitoki-plugin-postgres",
+        "p2p" => "amitoki/amitoki-plugin-p2p",
         other => other,
     };
     let segments: Vec<_> = repository.split('/').collect();
@@ -39,17 +39,17 @@ pub async fn download(source: &str) -> ManagerResult<tempfile::TempDir> {
     }
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
-    if let Ok(token) = std::env::var("STEGRDB_GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
+    if let Ok(token) = std::env::var("AMITOKI_GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
         let mut authorization = HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| "GitHubトークンの形式が不正です")?;
         authorization.set_sensitive(true);
         headers.insert(AUTHORIZATION, authorization);
     }
-    let client = Client::builder().user_agent("stegrdb-plugin-manager").default_headers(headers).timeout(DOWNLOAD_TIMEOUT).build()?;
+    let client = Client::builder().user_agent("amitoki-plugin-manager").default_headers(headers).timeout(DOWNLOAD_TIMEOUT).build()?;
     let route = version.map_or("latest".to_owned(), |version| format!("tags/{version}"));
     let response = client.get(format!("https://api.github.com/repos/{repository}/releases/{route}")).send().await.map_err(|_| "GitHubへ接続できません")?;
     if !response.status().is_success() {
         return Err(format!(
-            "リリースを取得できません (HTTP {})。privateリポジトリにはSTEGRDB_GITHUB_TOKENを設定してください",
+            "リリースを取得できません (HTTP {})。privateリポジトリにはAMITOKI_GITHUB_TOKENを設定してください",
             response.status().as_u16()
         )
         .into());

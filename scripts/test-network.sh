@@ -10,10 +10,10 @@ for line in sys.stdin:
         if artifact["target"]["name"] == "linux_network":
             print(artifact["executable"])
 ')
-docker build --tag stegrdb-network-test:local --file tests/network.Dockerfile .
+docker build --tag amitoki-network-test:local --file tests/network.Dockerfile .
 # ホストのネットワークに接続せず、テスト用vethだけで実フレームを送受信する。
 docker run --rm --network none --cap-add NET_ADMIN --cap-add NET_RAW \
-  --mount "type=bind,src=$PWD,dst=/work,readonly" stegrdb-network-test:local \
+  --mount "type=bind,src=$PWD,dst=/work,readonly" amitoki-network-test:local \
   sh -eu -c '
     for node in a b c; do
       ip link add "relay-$node" type veth peer name "host-$node"

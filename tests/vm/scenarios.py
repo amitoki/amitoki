@@ -10,7 +10,7 @@ import qemu
 import remote
 from settings import NODES, POLL_INTERVAL_SECONDS, PROBE_TIMEOUT_SECONDS, ROOT
 
-PROBE = "sudo ip netns exec client python3 /opt/stegrdb-lab/probe.py"
+PROBE = "sudo ip netns exec client python3 /opt/amitoki-lab/probe.py"
 # MTU上限のICMPを3回送り、一部だけ届く状態も失敗にする。
 ICMP_PACKETS = 3
 ICMP_BYTES = 1472
@@ -27,7 +27,7 @@ def wait_for(check, description):
 
 def database_count(sql):
     # SQLはこのファイルの固定文字列だけを渡す。
-    completed = remote.run("a", f'sudo -u postgres psql -d stegrdb -Atc "{sql}"')
+    completed = remote.run("a", f'sudo -u postgres psql -d amitoki -Atc "{sql}"')
     return int(completed.stdout.strip())
 
 
@@ -35,13 +35,13 @@ def prepare_receivers(relay):
     for node in NODES:
         if not qemu.is_running(node):
             raise RuntimeError("先にscripts/vm-lab upを実行してください")
-        wait_for(lambda: remote.run(node, "systemctl is-active --quiet stegrdb", check=False).returncode == 0,
+        wait_for(lambda: remote.run(node, "systemctl is-active --quiet amitoki", check=False).returncode == 0,
                  f"VM {node}の中継が起動していません")
-        remote.run(node, "sudo systemctl stop stegrdb-probe 2>/dev/null || true; sudo rm -f /run/stegrdb-probe.ready")
-        remote.run(node, "sudo systemd-run --unit=stegrdb-probe --collect "
+        remote.run(node, "sudo systemctl stop amitoki-probe 2>/dev/null || true; sudo rm -f /run/amitoki-probe.ready")
+        remote.run(node, "sudo systemd-run --unit=amitoki-probe --collect "
                         "--property=NetworkNamespacePath=/run/netns/client "
-                        "/usr/bin/python3 /opt/stegrdb-lab/probe.py serve")
-        wait_for(lambda: remote.run(node, "test -f /run/stegrdb-probe.ready", check=False).returncode == 0,
+                        "/usr/bin/python3 /opt/amitoki-lab/probe.py serve")
+        wait_for(lambda: remote.run(node, "test -f /run/amitoki-probe.ready", check=False).returncode == 0,
                  f"VM {node}の受信サーバが起動していません")
     if relay == "postgres":
         wait_for(lambda: database_count("SELECT count(*) FROM stegrdb_relay.nodes WHERE channel='vm-lab'") == 3,
@@ -67,7 +67,7 @@ def check_offline_delivery(relay):
     # 停止試験中のARP再解決に結果を左右させず、UDPの未処理キューを直接検証する。
     remote.run("a", "sudo ip netns exec client ip neigh replace 192.0.2.13 "
                     "lladdr 02:00:00:00:00:13 nud permanent dev client0")
-    remote.run("c", "sudo systemctl stop stegrdb")
+    remote.run("c", "sudo systemctl stop amitoki")
     try:
         expected = json.loads(remote.run("a", f"{PROBE} send-udp 192.0.2.13 {token}").stdout)
         if relay == "postgres":
@@ -77,7 +77,7 @@ def check_offline_delivery(relay):
         before = json.loads(remote.run("c", f"{PROBE} received {token}").stdout)
         assert not before, "中継停止中に別経路で届いています"
     finally:
-        remote.run("c", "sudo systemctl start stegrdb")
+        remote.run("c", "sudo systemctl start amitoki")
     wait_for(lambda: json.loads(remote.run("c", f"{PROBE} received {token}").stdout) == expected,
              "再起動後のUDPペイロードが送信内容と一致しません")
     if relay == "postgres":
@@ -88,23 +88,23 @@ def check_offline_delivery(relay):
 
 
 def check_plugin_management(relay):
-    command = "sudo -u stegrdb /opt/stegrdb-lab/stegrdb plugin --directory /opt/stegrdb-lab/plugins"
-    before = remote.run("a", "sha256sum /opt/stegrdb-lab/stegrdb").stdout.split()[0]
+    command = "sudo -u amitoki /opt/amitoki-lab/amitoki plugin --directory /opt/amitoki-lab/plugins"
+    before = remote.run("a", "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0]
     assert remote.run("a", f"{command} remove {relay}", check=False).returncode != 0
-    assert remote.run("a", f"{command} update {relay} --path /opt/stegrdb-lab/packages/{relay}", check=False).returncode != 0
+    assert remote.run("a", f"{command} update {relay} --path /opt/amitoki-lab/packages/{relay}", check=False).returncode != 0
     inactive = "postgres" if relay == "p2p" else "p2p"
     remote.run("a", f"{command} remove {inactive}")
-    remote.run("a", f"{command} add --path /opt/stegrdb-lab/packages/{inactive}")
+    remote.run("a", f"{command} add --path /opt/amitoki-lab/packages/{inactive}")
     if inactive == "postgres":
         remote.run("a", f"{command} configure postgres --set max_connections=4")
         remote.run("a", f"{command} validate postgres")
         assert remote.run("a", f"{command} configure postgres --set max_connections=0", check=False).returncode != 0
-    after = remote.run("a", "sha256sum /opt/stegrdb-lab/stegrdb").stdout.split()[0]
+    after = remote.run("a", "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0]
     assert before == after, "プラグインの追加削除で本体が変更されています"
-    with (ROOT / "target/release/stegrdb").open("rb") as stream:
+    with (ROOT / "target/release/amitoki").open("rb") as stream:
         expected = hashlib.file_digest(stream, "sha256").hexdigest()
     for node in NODES:
-        assert remote.run(node, "sha256sum /opt/stegrdb-lab/stegrdb").stdout.split()[0] == expected
+        assert remote.run(node, "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0] == expected
         assert remote.run(node, "command -v cargo", check=False).returncode != 0
     return {"active_remove_rejected": True, "active_update_rejected": True,
             "inactive_remove_and_add": True, "core_sha256_unchanged": before, "cargo_absent_on_guests": True}

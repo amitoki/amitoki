@@ -1,6 +1,6 @@
 # 中継方式をプラグインとして追加する
 
-stegrdbはEthernetフレームを中継する。DBへの保存方法、メッセージキューの使い方、別プロセスとの通信方式は、中継プラグインが決める。パケットの解析・フィルタ・NICへの送受信はコアが担当する。
+amitokiはEthernetフレームを中継する。DBへの保存方法、メッセージキューの使い方、別プロセスとの通信方式は、中継プラグインが決める。パケットの解析・フィルタ・NICへの送受信はコアが担当する。
 
 本体は`crates/relay`のpublish・receive・acknowledgeだけを使う。外部プラグインは独立した実行ファイルで、インストール後に本体を再ビルドする必要はない。
 
@@ -15,7 +15,7 @@ flowchart LR
 
 ## 配布・設定・通信を分ける
 
-開発用の`plugins/postgres`と`plugins/p2p`はprivateリポジトリのsubmodule。実行時はGitHub Releaseかローカル配布物からインストールし、開発用のsubmoduleは参照しない。親リポジトリはGitのコミットを固定し、各プラグインは共通SDKのGit revisionとCargo.lockを固定する。
+開発用の`plugins/postgres`と`plugins/p2p`はamitoki Organizationの公開リポジトリのsubmodule。実行時はGitHub Releaseかローカル配布物からインストールし、開発用のsubmoduleは参照しない。親リポジトリはGitのコミットを固定し、各プラグインは共通SDKのGit revisionとCargo.lockを固定する。
 
 配布物の`plugin.json`に名前、バージョン、OS・CPU、実行ファイル名、SHA256、通信仕様、JSON Schemaを持たせる。本体はプラグインごとの設定項目をハードコードしない。設定の型・必須条件・説明・既定値はプラグイン側が定義する。CLIの設定は次回起動時に反映し、実行中の無停止切替は行わない。
 
@@ -38,9 +38,9 @@ UUIDは収集時に一度生成し、再試行でも維持する。`Receipt`は�
 1. 独立したリポジトリで`RelayPlugin`と`Relay`を実装する。
 2. JSON Schemaを含む`PluginManifest`を定義し、`--stdio`でSDKの`serve`、`--describe`で定義のJSONを返す。
 3. releaseビルド後に`scripts/package-plugin.py <実行ファイル> <出力先>`で配布物を作る。
-4. `stegrdb plugin add --path <出力先>`で追加し、設定検証と通信試験を行う。
+4. `amitoki plugin add --path <出力先>`で追加し、設定検証と通信試験を行う。
 
-本体のCargo.tomlやプラグイン登録コードを変更する必要はない。privateリポジトリからCLIで取得する場合は`STEGRDB_GITHUB_TOKEN`または`GH_TOKEN`を設定する。
+本体のCargo.tomlやプラグイン登録コードを変更する必要はない。privateリポジトリからCLIで取得する場合は`AMITOKI_GITHUB_TOKEN`または`GH_TOKEN`を設定する。
 
 ## P2Pは相互認証したQUICで直接送る
 

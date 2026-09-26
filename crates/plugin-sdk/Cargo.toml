@@ -1,5 +1,5 @@
 [package]
-name = "stegrdb-plugin-sdk"
+name = "amitoki-plugin-sdk"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,5 +9,5 @@ jsonschema = { version = "0.33", default-features = false }
 rmp-serde = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-stegrdb-relay = { path = "../relay", version = "0.1.0" }
+amitoki-relay = { path = "../relay", version = "0.1.0" }
 tokio = { version = "1", features = ["io-std", "io-util", "process", "sync", "time", "rt", "macros"] }

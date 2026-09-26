@@ -48,19 +48,19 @@ def seed_guest(node, image):
     disk = directory / "disk.qcow2"
     if disk.exists():
         return
-    iso_tool = os.environ.get("STEGRDB_GENISOIMAGE", "genisoimage")
+    iso_tool = os.environ.get("AMITOKI_GENISOIMAGE", "genisoimage")
     if not shutil.which(iso_tool):
         raise RuntimeError("genisoimageが必要です。docs/vm-lab.mdの準備手順を参照してください")
     packages = ["iproute2", "iputils-ping", "python3", "ethtool"]
     if node == "a":
         packages.append("postgresql")
     configuration = {
-        "hostname": f"stegrdb-{node}", "manage_etc_hosts": True,
+        "hostname": f"amitoki-{node}", "manage_etc_hosts": True,
         "ssh_pwauth": False, "ssh_authorized_keys": [(STATE / "id_ed25519.pub").read_text().strip()],
         "package_update": True, "packages": packages,
     }
     (directory / "user-data").write_text("#cloud-config\n" + json.dumps(configuration))
-    (directory / "meta-data").write_text(f"instance-id: stegrdb-{node}\nlocal-hostname: stegrdb-{node}\n")
+    (directory / "meta-data").write_text(f"instance-id: amitoki-{node}\nlocal-hostname: amitoki-{node}\n")
     subprocess.run([
         iso_tool, "-quiet", "-output", str(directory / "seed.iso"), "-volid", "cidata",
         "-joliet", "-rock", str(directory / "user-data"), str(directory / "meta-data"),

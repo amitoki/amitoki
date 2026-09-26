@@ -16,8 +16,8 @@ TCP_BYTES = 2 * 1024 * 1024
 TCP_PORT = 19001
 UDP_PORT = 19000
 TIMEOUT_SECONDS = 30
-RECEIVED = Path("/run/stegrdb-probe.jsonl")
-READY = Path("/run/stegrdb-probe.ready")
+RECEIVED = Path("/run/amitoki-probe.jsonl")
+READY = Path("/run/amitoki-probe.ready")
 
 
 class TcpReceiver(socketserver.BaseRequestHandler):
@@ -46,7 +46,7 @@ class UdpReceiver(socketserver.BaseRequestHandler):
 
 
 def serve():
-    address_number = {"a": 11, "b": 12, "c": 13}[Path("/opt/stegrdb-lab/node").read_text().strip()]
+    address_number = {"a": 11, "b": 12, "c": 13}[Path("/opt/amitoki-lab/node").read_text().strip()]
     address = f"192.0.2.{address_number}"
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer((address, TCP_PORT), TcpReceiver) as tcp:

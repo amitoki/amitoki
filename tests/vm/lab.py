@@ -15,15 +15,15 @@ from settings import NODES, ROOT, SSH_PORTS, STATE
 
 
 def up(relay):
-    subprocess.run(["cargo", "build", "--release", "--bin", "stegrdb", "--locked"], cwd=ROOT, check=True)
+    subprocess.run(["cargo", "build", "--release", "--bin", "amitoki", "--locked"], cwd=ROOT, check=True)
     for plugin in ("postgres", "p2p"):
         subprocess.run(["cargo", "build", "--release", "--locked", "--manifest-path", f"plugins/{plugin}/Cargo.toml"], cwd=ROOT, check=True)
-        subprocess.run([sys.executable, "scripts/package-plugin.py", f"plugins/{plugin}/target/release/stegrdb-plugin-{plugin}", str(STATE / "packages" / plugin)], cwd=ROOT, check=True)
+        subprocess.run([sys.executable, "scripts/package-plugin.py", f"plugins/{plugin}/target/release/amitoki-plugin-{plugin}", str(STATE / "packages" / plugin)], cwd=ROOT, check=True)
     identities = STATE / "identities"
     identities.mkdir(exist_ok=True)
     for node in NODES:
         if not (identities / node).exists():
-            subprocess.run([str(ROOT / "plugins/p2p/target/release/stegrdb-plugin-p2p"), "identity", "--output", str(identities / node)], check=True)
+            subprocess.run([str(ROOT / "plugins/p2p/target/release/amitoki-plugin-p2p"), "identity", "--output", str(identities / node)], check=True)
     password = images.prepare_credentials()
     image = images.prepare_image()
     # まずDBを持つ1台を起動し、その準備が済んでから3台へ広げる。

@@ -6,10 +6,10 @@ mod publish;
 mod retry;
 
 use crate::{firewall::Firewall, network::PacketIo};
+use amitoki_relay::{Relay, RelayError};
 pub use config::EngineConfig;
 pub use metrics::Metrics;
 use std::{sync::Arc, time::Duration};
-use stegrdb_relay::{Relay, RelayError};
 use tokio::{sync::mpsc, task::JoinSet, time::timeout};
 use tokio_util::sync::CancellationToken;
 

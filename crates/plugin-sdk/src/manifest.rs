@@ -1,6 +1,6 @@
+use amitoki_relay::RelayError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use stegrdb_relay::RelayError;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 

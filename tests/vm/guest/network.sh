@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-node=$(cat /opt/stegrdb-lab/node)
+node=$(cat /opt/amitoki-lab/node)
 if [[ ${1:-start} == stop ]]; then
   ip link delete relay0 2>/dev/null || true
   ip netns delete client 2>/dev/null || true

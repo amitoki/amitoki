@@ -1,8 +1,8 @@
 use crate::{engine::EngineConfig, firewall::Firewall};
+use amitoki_relay::RelayContext;
 use serde::Deserialize;
 use serde_json::Value;
 use std::path::Path;
-use stegrdb_relay::RelayContext;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

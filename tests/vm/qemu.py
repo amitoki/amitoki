@@ -52,7 +52,7 @@ def start(node):
     if node == "a":
         forward += f",hostfwd=tcp:127.0.0.1:{DATABASE_PORT}-:5432"
     subprocess.run([
-        "qemu-system-x86_64", "-name", f"stegrdb-lab-{node}", "-enable-kvm", "-cpu", "host",
+        "qemu-system-x86_64", "-name", f"amitoki-lab-{node}", "-enable-kvm", "-cpu", "host",
         "-smp", str(CPU_COUNT), "-m", str(MEMORY_MIB), "-display", "none", "-daemonize",
         "-drive", f"file={directory / 'disk.qcow2'},format=qcow2,if=virtio",
         "-drive", f"file={directory / 'seed.iso'},format=raw,media=cdrom,readonly=on",

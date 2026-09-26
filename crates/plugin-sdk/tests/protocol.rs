@@ -1,4 +1,4 @@
-use stegrdb_plugin_sdk::{
+use amitoki_plugin_sdk::{
     wire::{read_message, write_message, Request, MAX_MESSAGE_BYTES},
     PluginManifest, PROTOCOL_VERSION,
 };

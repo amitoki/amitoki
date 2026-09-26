@@ -1,9 +1,9 @@
 use super::{retry::retry_operation, Engine, EngineError};
+use amitoki_relay::Frame;
 use std::{
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
-use stegrdb_relay::Frame;
 use tokio::{sync::mpsc, time::sleep};
 
 pub(super) async fn publish(engine: Arc<Engine>, mut receiver: mpsc::Receiver<Frame>) -> Result<(), EngineError> {
