@@ -55,7 +55,11 @@ impl Block for Instance {
                 let mut annotations = annotations.clone();
                 annotations["input"] = packet.annotations.clone();
                 BlockOutput {
-                    ports: vec![if self.mode == "invalid" { "inject" } else { "pass" }.into()],
+                    ports: if self.mode == "drop" {
+                        vec![]
+                    } else {
+                        vec![if self.mode == "invalid" { "inject" } else { "pass" }.into()]
+                    },
                     annotations,
                 }
             })
@@ -70,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         protocol_version: PROTOCOL_VERSION,
         description: String::new(),
         block: Some(BlockDefinition { outputs: vec!["pass".into()] }),
-        config_schema: json!({"type":"object","additionalProperties":false,"properties":{"mode":{"type":"string","enum":["pass","delay","crash","capabilities","oversize","invalid"]}}}),
+        config_schema: json!({"type":"object","additionalProperties":false,"properties":{"mode":{"type":"string","enum":["pass","drop","delay","crash","capabilities","oversize","invalid"]}}}),
     };
     if std::env::args().any(|argument| argument == "--describe") {
         println!("{}", serde_json::to_string(&manifest)?);

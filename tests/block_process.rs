@@ -1,4 +1,4 @@
-use amitoki::plugin_manager::{Package, PluginStore};
+use amitoki::plugin_manager::PluginStore;
 use amitoki_plugin_sdk::{
     block::{Block, BlockContext, BlockPacket, ProcessBlock},
     PluginManifest,
@@ -6,13 +6,13 @@ use amitoki_plugin_sdk::{
 use amitoki_relay::{Frame, RelayContext};
 use bytes::Bytes;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::{
-    fs,
     path::{Path, PathBuf},
     process::Command,
     time::Duration,
 };
+#[path = "support/package.rs"]
+mod package_fixture;
 fn executable() -> PathBuf {
     std::env::var_os("AMITOKI_TEST_BLOCK").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_amitoki-test-block")))
 }
@@ -40,16 +40,7 @@ async fn connect(mode: &str) -> ProcessBlock {
     ProcessBlock::connect(&executable(), &manifest(), (context("inspect"), json!({"mode":mode}))).await.unwrap()
 }
 fn package(path: &Path) {
-    let binary = fs::read(executable()).unwrap();
-    let package = Package {
-        manifest: manifest(),
-        target: format!("{}-unknown-linux-gnu", std::env::consts::ARCH),
-        binary: "amitoki-plugin-block-fixture".into(),
-        sha256: format!("{:x}", Sha256::digest(&binary)),
-        source: None,
-    };
-    fs::write(path.join(&package.binary), binary).unwrap();
-    fs::write(path.join("plugin.json"), serde_json::to_vec(&package).unwrap()).unwrap();
+    package_fixture::write_package(&executable(), path);
 }
 #[tokio::test]
 async fn installed_blocks_have_independent_instances_and_hold_the_package_lock() {

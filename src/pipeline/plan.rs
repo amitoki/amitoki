@@ -2,6 +2,7 @@
 use super::{
     config::ErrorPolicy,
     graph::{Destination, Graph},
+    trace::BlockTrace,
     PipelineEngine,
 };
 use amitoki_plugin_sdk::{
@@ -15,7 +16,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::time::timeout;
 
@@ -43,11 +44,11 @@ struct PendingRoutes {
     relay_targets: Vec<HashSet<usize>>,
     injection_targets: HashSet<usize>,
 }
-struct Planner<'a> {
-    graph: &'a Graph,
-    blocks: &'a [RunningBlock],
-    metrics: &'a PipelineMetrics,
-    operation_timeout: Duration,
+pub(crate) struct Planner<'a> {
+    pub graph: &'a Graph,
+    pub blocks: &'a [RunningBlock],
+    pub metrics: &'a PipelineMetrics,
+    pub operation_timeout: Duration,
 }
 
 impl PipelineEngine {
@@ -64,6 +65,10 @@ impl PipelineEngine {
 }
 impl Planner<'_> {
     async fn prepare(&self, frames: &[Frame], entry: &[Destination]) -> Result<Plan, RelayError> {
+        self.prepare_traced(frames, entry, None).await
+    }
+
+    pub(crate) async fn prepare_traced(&self, frames: &[Frame], entry: &[Destination], mut trace: Option<&mut Vec<BlockTrace>>) -> Result<Plan, RelayError> {
         let mut pending = PendingRoutes {
             blocks: (0..self.blocks.len()).map(|_| Vec::new()).collect(),
             relay_targets: (0..frames.len()).map(|_| HashSet::new()).collect(),
@@ -84,7 +89,7 @@ impl Planner<'_> {
         for index in &self.graph.order {
             let inputs = std::mem::take(&mut pending.blocks[*index]);
             for batch in inputs.chunks(MAX_BATCH) {
-                let Some(outputs) = self.process(*index, batch).await? else {
+                let Some(outputs) = self.process_step(*index, batch, trace.as_deref_mut()).await? else {
                     continue;
                 };
                 for (input, output) in batch.iter().zip(outputs) {
@@ -95,10 +100,36 @@ impl Planner<'_> {
         Ok(pending.finish(frames, self.graph.received.len()))
     }
 
-    async fn process(&self, index: usize, inputs: &[Input]) -> Result<Option<Vec<BlockOutput>>, RelayError> {
+    async fn process_step(&self, index: usize, inputs: &[Input], trace: Option<&mut Vec<BlockTrace>>) -> Result<Option<Vec<BlockOutput>>, RelayError> {
+        let started = trace.as_ref().map(|_| Instant::now());
+        let response = self.process(index, inputs).await;
+        if let (Some(trace), Some(started)) = (trace, started) {
+            let elapsed_us = started.elapsed().as_micros().min(u64::MAX as u128) as u64;
+            for (offset, input) in inputs.iter().enumerate() {
+                trace.push(BlockTrace {
+                    packet: input.index,
+                    block: index,
+                    elapsed_us,
+                    output: response.as_ref().map(|outputs| outputs[offset].clone()).map_err(ToString::to_string),
+                });
+            }
+        }
+        match response {
+            Ok(outputs) => Ok(Some(outputs)),
+            Err(error) => match self.blocks[index].on_error {
+                ErrorPolicy::Stop => Err(RelayError::permanent(format!("解析ブロックが失敗しました: {error}"))),
+                ErrorPolicy::DropBranch => {
+                    self.metrics.dropped_branches.fetch_add(inputs.len() as u64, Ordering::Relaxed);
+                    Ok(None)
+                },
+            },
+        }
+    }
+
+    async fn process(&self, index: usize, inputs: &[Input]) -> Result<Vec<BlockOutput>, RelayError> {
         let block = &self.blocks[index];
         let packets: Vec<_> = inputs.iter().map(|input| input.packet.clone()).collect();
-        let response = timeout(self.operation_timeout, block.block.process(&packets))
+        let outputs = timeout(self.operation_timeout, block.block.process(&packets))
             .await
             .map_err(|_| RelayError::permanent("解析ブロックがタイムアウトしました"))
             .and_then(|response| response)
@@ -110,20 +141,9 @@ impl Planner<'_> {
                     output.validate(&block.definition)?;
                 }
                 Ok(outputs)
-            });
-        match response {
-            Ok(outputs) => {
-                self.metrics.processed.fetch_add(inputs.len() as u64, Ordering::Relaxed);
-                Ok(Some(outputs))
-            },
-            Err(error) => match block.on_error {
-                ErrorPolicy::Stop => Err(RelayError::permanent(format!("解析ブロックが失敗しました: {error}"))),
-                ErrorPolicy::DropBranch => {
-                    self.metrics.dropped_branches.fetch_add(inputs.len() as u64, Ordering::Relaxed);
-                    Ok(None)
-                },
-            },
-        }
+            })?;
+        self.metrics.processed.fetch_add(inputs.len() as u64, Ordering::Relaxed);
+        Ok(outputs)
     }
 }
 impl PendingRoutes {

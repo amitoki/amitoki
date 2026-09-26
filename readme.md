@@ -4,6 +4,8 @@
 
 0.4.0では解析・フィルタも外部ブロックとして作成し、複数の中継先へ分岐できる。[ブロック構成の設計・使い方](docs/block-pipelines.md)と[設定例](amitoki.pipeline.example.toml)を参照する。
 
+種類別CLI、GitHub URL・ディレクトリからの追加、PCAPでの単体テスト・経路トレース・結果比較は[プラグイン開発とデバッグ](docs/plugin-development.md)を参照する。
+
 Linux向け。まず以下の手順でビルドと設定を済ませる。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。
 
 [stegrdbのfeat/relay-plugins](https://github.com/aida0710/stegrdb/tree/feat/relay-plugins)の履歴を引き継いだ独立プロジェクト。名前は「網＋解き」。移行手順は[amitokiへの移行](docs/amitoki-migration.md)を参照する。
@@ -36,12 +38,12 @@ git submodule update --init --recursive
 利用時はプラグインのソース取得やビルドをせず、GitHub Releaseの配布物を追加できる。公式プラグインは公開されているため、GitHubトークンは不要。
 
 ```bash
-./target/release/amitoki plugin add postgres
-./target/release/amitoki plugin add p2p
-./target/release/amitoki plugin list
-./target/release/amitoki plugin describe postgres
-./target/release/amitoki plugin configure postgres --set max_connections=4
-./target/release/amitoki plugin validate postgres
+./target/release/amitoki plugin relay add https://github.com/amitoki/amitoki-plugin-postgres
+./target/release/amitoki plugin relay add https://github.com/amitoki/amitoki-plugin-p2p
+./target/release/amitoki plugin relay list
+./target/release/amitoki plugin relay describe postgres
+./target/release/amitoki plugin relay configure postgres --set max_connections=4
+./target/release/amitoki plugin relay validate postgres
 ```
 
 `configure postgres`だけなら対話設定になる。環境変数名には`AMITOKI_POSTGRES_URL`、接続数には`4`、初回再生期間には`4000`を入力するか、空欄で既定値を使う。秘密情報の値は入力せず、参照する環境変数名を指定する。
@@ -49,9 +51,9 @@ git submodule update --init --recursive
 保存先は`$XDG_DATA_HOME/amitoki/plugins`、未設定なら`~/.local/share/amitoki/plugins`。サービス用には`AMITOKI_PLUGIN_DIR`で共通の場所を指定する。CLIの`--directory`はその操作に限った指定なので、サービス起動にも同じ場所を設定する。プラグインの設定は`.config/<名前>.json`へ権限0600で保存し、`[relay.options]`の項目で上書きできる。
 
 ```bash
-./target/release/amitoki plugin update p2p
-./target/release/amitoki plugin remove p2p
-./target/release/amitoki plugin add --path ./dist/postgres
+./target/release/amitoki plugin relay update p2p
+./target/release/amitoki plugin relay del p2p
+./target/release/amitoki plugin relay add ./dist/postgres
 ```
 
 設定の保存・更新・削除は対象の中継を停止してから行う。使用中の操作は拒否する。削除後も設定は保持する。更新は実行ファイルのSHA256、通信仕様、OS・CPU、保存済み設定を検証し、原子的に入れ替える。SHA256は破損検出であり、第三者署名ではない。取得先リポジトリと認証済みHTTPSを信頼境界とする。
@@ -132,4 +134,4 @@ VMで起動から通信まで確認する場合は[3台のVMによるテスト�
 
 旧`packets`と`processed_packets`からの自動移行は行わない。新しい`stegrdb_relay`スキーマを作り、相手ノードも同じ版へそろえる。保存された時刻間隔を再現する待機もなくし、取得できたフレームから順に送る。旧IDPS専用ログ設定は使わず、標準エラーのログと終了時の集計を見る。
 
-0.2の組み込みPostgreSQLから移行する場合は、`plugin add postgres`でプラグインを追加する。接続設定とDBスキーマはそのまま使える。0.3の本体は常にPostgreSQLへ依存せずにビルドされる。
+0.2の組み込みPostgreSQLから移行する場合は、`plugin relay add https://github.com/amitoki/amitoki-plugin-postgres`でプラグインを追加する。接続設定とDBスキーマはそのまま使える。0.3の本体は常にPostgreSQLへ依存せずにビルドされる。

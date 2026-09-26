@@ -1,5 +1,4 @@
 use super::{Engine, EngineError};
-use crate::packet::parse_frame;
 use amitoki_relay::{Frame, MAX_FRAME_SIZE};
 use bytes::Bytes;
 use std::sync::{atomic::Ordering, Arc};
@@ -19,7 +18,7 @@ pub(super) async fn capture(engine: Arc<Engine>, sender: mpsc::Sender<Frame>, sh
             received = engine.network.receive(&mut buffer) => received?,
         };
         let bytes = buffer.get(..length).ok_or_else(|| EngineError::Worker("受信サイズがバッファを超えています".into()))?;
-        let allowed = parse_frame(bytes).is_ok_and(|packet| engine.firewall.allows(&packet));
+        let allowed = engine.firewall.check_frame(bytes).is_ok();
         if !allowed {
             engine.metrics.filtered.fetch_add(1, Ordering::Relaxed);
             continue;

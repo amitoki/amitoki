@@ -1,4 +1,4 @@
-use crate::packet::{MacAddress, PacketMetadata};
+use crate::packet::{parse_frame, MacAddress, PacketError, PacketMetadata};
 use serde::Deserialize;
 use std::net::IpAddr;
 
@@ -53,5 +53,22 @@ impl Firewall {
             Policy::Whitelist => matches,
             Policy::Blacklist => !matches,
         }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FrameRejection {
+    #[error("{0}")]
+    Packet(#[from] PacketError),
+    #[error("本体のfirewallルールにより拒否しました")]
+    Firewall,
+}
+impl Firewall {
+    pub fn check_frame(&self, bytes: &[u8]) -> Result<(), FrameRejection> {
+        let packet = parse_frame(bytes)?;
+        if !self.allows(&packet) {
+            return Err(FrameRejection::Firewall);
+        }
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 //! 各中継の取得は独立させ、受領バッチの処理が終わるまで次を取得しない。
 use super::PipelineEngine;
-use crate::{engine::EngineError, packet::parse_frame};
+use crate::engine::EngineError;
 use amitoki_plugin_sdk::wire::MAX_BATCH;
 use amitoki_relay::{Delivery, Frame, RelayError, MAX_FRAME_SIZE};
 use bytes::Bytes;
@@ -35,7 +35,7 @@ pub(super) async fn capture(engine: Arc<PipelineEngine>, sender: mpsc::Sender<Jo
             received = engine.network.receive(&mut buffer) => received?,
         };
         let bytes = buffer.get(..length).ok_or_else(|| EngineError::Worker("受信サイズがバッファを超えています".into()))?;
-        if !parse_frame(bytes).is_ok_and(|packet| engine.settings.firewall.allows(&packet)) {
+        if engine.settings.firewall.check_frame(bytes).is_err() {
             engine.metrics.filtered.fetch_add(1, Ordering::Relaxed);
             continue;
         }

@@ -33,11 +33,7 @@ pub fn configure(store: &PluginStore, name: &str, assignments: &[String]) -> Man
             }
         }
     } else {
-        for assignment in assignments {
-            let (name, value) = assignment.split_once('=').ok_or("--set 項目=値で指定してください")?;
-            let definition = &package.manifest.config_schema["properties"][name];
-            options.insert(name.to_owned(), parse_value(value, definition));
-        }
+        apply_assignments(options, &package.manifest.config_schema, assignments)?;
     }
     store.save_options(name, &Value::Object(options.clone()))?;
     println!("{name}の設定を保存しました。次回の中継起動で反映されます。");
@@ -50,4 +46,12 @@ fn parse_value(text: &str, definition: &Value) -> Value {
     } else {
         serde_json::from_str(text).unwrap_or_else(|_| Value::String(text.to_owned()))
     }
+}
+
+pub(crate) fn apply_assignments(options: &mut serde_json::Map<String, Value>, schema: &Value, assignments: &[String]) -> ManagerResult<()> {
+    for assignment in assignments {
+        let (name, value) = assignment.split_once('=').ok_or("--set 項目=値で指定してください")?;
+        options.insert(name.to_owned(), parse_value(value, &schema["properties"][name]));
+    }
+    Ok(())
 }

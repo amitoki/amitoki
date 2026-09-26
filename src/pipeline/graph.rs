@@ -1,7 +1,10 @@
 //! 経路を起動時に検証し、実行時には添字で参照する。
 use super::config::{PipelineConfig, MAX_VISITS};
 use amitoki_plugin_sdk::block::BlockDefinition;
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap, HashSet},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Destination {
@@ -65,15 +68,15 @@ impl Graph {
                 }
             }
         }
-        let mut ready: Vec<_> = pending.iter().enumerate().filter_map(|(index, count)| (*count == 0).then_some(index)).collect();
+        let mut ready: BinaryHeap<_> = pending.iter().enumerate().filter_map(|(index, count)| (*count == 0).then_some(Reverse(index))).collect();
         let mut order = Vec::new();
-        while let Some(index) = ready.pop() {
+        while let Some(Reverse(index)) = ready.pop() {
             order.push(index);
             for destination in self.outputs[index].values().flatten() {
                 if let Destination::Block(next) = destination {
                     pending[*next] -= 1;
                     if pending[*next] == 0 {
-                        ready.push(*next);
+                        ready.push(Reverse(*next));
                     }
                 }
             }

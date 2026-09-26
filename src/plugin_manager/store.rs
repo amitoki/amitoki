@@ -1,4 +1,4 @@
-use super::{package::read_options, ManagerResult, Package};
+use super::{package::read_options, ManagerResult, Package, PluginKind};
 use amitoki_plugin_sdk::{
     block::{Block, BlockContext, BlockOutput, BlockPacket, ProcessBlock},
     ProcessRelay,
@@ -13,6 +13,14 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+#[derive(Default)]
+pub(crate) struct InstallRequest {
+    pub update: bool,
+    pub source: Option<String>,
+    pub kind: Option<PluginKind>,
+    pub name: Option<String>,
+}
 
 pub struct PluginStore {
     pub directory: PathBuf,
@@ -62,14 +70,36 @@ impl PluginStore {
         Ok(lock)
     }
     pub fn install(&self, source: &Path, update: bool) -> ManagerResult<Package> {
-        let package = Package::load(source)?;
+        self.install_checked(
+            source,
+            InstallRequest {
+                update,
+                ..InstallRequest::default()
+            },
+        )
+    }
+    pub(crate) fn install_checked(&self, source: &Path, request: InstallRequest) -> ManagerResult<Package> {
+        let mut package = Package::load(source)?;
+        if let Some(kind) = request.kind {
+            kind.check(&package)?;
+        }
+        if request.name.as_ref().is_some_and(|name| *name != package.manifest.name) {
+            return Err("更新対象のプラグイン名が一致しません".into());
+        }
+        if let Some(source) = request.source {
+            package.source = Some(source);
+        }
         if package.manifest.name == "memory" {
             return Err("memoryは本体内のテスト用プラグインです".into());
         }
         package.verify(source)?;
         let _lock = self.lock(&package.manifest.name, true)?;
         let destination = self.plugin_path(&package.manifest.name)?;
-        if destination.exists() && !update {
+        if destination.exists() {
+            let installed = Package::load(&destination)?;
+            PluginKind::of(&installed).check(&package)?;
+        }
+        if destination.exists() && !request.update {
             return Err("追加済みです。plugin updateを使ってください".into());
         }
         if self.directory.join(".config").join(format!("{}.json", package.manifest.name)).exists() {

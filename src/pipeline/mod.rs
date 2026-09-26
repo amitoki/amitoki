@@ -4,8 +4,9 @@ pub use connections::Connections;
 mod executor;
 pub mod graph;
 mod history;
-mod plan;
+pub(crate) mod plan;
 mod sources;
+pub(crate) mod trace;
 
 use crate::{
     engine::{worker_failure, EngineError, EngineSettings, Metrics},
