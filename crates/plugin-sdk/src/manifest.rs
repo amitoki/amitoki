@@ -12,6 +12,8 @@ pub struct PluginManifest {
     pub protocol_version: u32,
     pub description: String,
     pub config_schema: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block: Option<crate::block::BlockDefinition>,
 }
 
 impl PluginManifest {
@@ -24,6 +26,9 @@ impl PluginManifest {
         }
         if self.version.is_empty() || self.config_schema.get("type").and_then(Value::as_str) != Some("object") {
             return Err(RelayError::permanent("プラグインのバージョンまたは設定定義が不正です"));
+        }
+        if let Some(block) = &self.block {
+            block.validate()?;
         }
         jsonschema::validator_for(&self.config_schema).map_err(|_| RelayError::permanent("設定スキーマを解釈できません"))?;
         Ok(())

@@ -15,7 +15,7 @@ install -d -o amitoki -g amitoki /opt/amitoki-lab/plugins
 chown -R amitoki:amitoki identity
 chmod 700 identity
 chmod 600 identity/key.der
-for plugin in postgres p2p; do
+for plugin in postgres p2p packet-rules; do
   if [[ -d plugins/$plugin ]]; then
     runuser -u amitoki -- ./amitoki plugin --directory /opt/amitoki-lab/plugins update "$plugin" --path "packages/$plugin"
   else
@@ -23,7 +23,7 @@ for plugin in postgres p2p; do
   fi
 done
 
-if [[ $node == a && $relay == postgres ]]; then
+if [[ $node == a && ( $relay == postgres || $relay == both ) ]]; then
   pg_conftool 16 main set listen_addresses '*'
   # QEMUのhost forwardingはゲストから10.0.2.2に見える。専用DB・専用ロールだけ許可する。
   rule='host amitoki amitoki 10.0.2.2/32 scram-sha-256'

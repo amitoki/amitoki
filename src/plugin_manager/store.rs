@@ -1,5 +1,8 @@
 use super::{package::read_options, ManagerResult, Package};
-use amitoki_plugin_sdk::ProcessRelay;
+use amitoki_plugin_sdk::{
+    block::{Block, BlockContext, BlockOutput, BlockPacket, ProcessBlock},
+    ProcessRelay,
+};
 use amitoki_relay::{Delivery, Frame, Receipt, Relay, RelayContext, RelayError};
 use async_trait::async_trait;
 use fs2::FileExt;
@@ -108,9 +111,18 @@ impl PluginStore {
     pub fn resolved_options(&self, name: &str, overrides: &Value) -> ManagerResult<Value> {
         let mut options = self.options(name)?;
         let values = options.as_object_mut().ok_or("保存された設定がオブジェクトではありません")?;
-        values.extend(overrides.as_object().ok_or("relay.optionsをテーブルで指定してください")?.clone());
+        values.extend(overrides.as_object().ok_or("optionsをテーブルで指定してください")?.clone());
         Package::load(&self.plugin_path(name)?)?.manifest.validate_options(&options)?;
         Ok(options)
+    }
+    pub async fn connect_block(&self, name: &str, context: BlockContext, options: Value) -> ManagerResult<Arc<dyn Block>> {
+        let lock = self.lock(name, false)?;
+        let path = self.plugin_path(name)?;
+        let package = Package::load(&path)?;
+        package.verify(&path)?;
+        let options = self.resolved_options(name, &options)?;
+        let block = ProcessBlock::connect(&path.join(&package.binary), &package.manifest, (context, options)).await?;
+        Ok(Arc::new(InstalledBlock { block, _lock: lock }))
     }
     pub async fn connect(&self, name: &str, context: RelayContext, options: Value) -> ManagerResult<Arc<dyn Relay>> {
         let lock = self.lock(name, false)?;
@@ -149,5 +161,16 @@ fn exchange_directories(source: &Path, destination: &Path) -> std::io::Result<()
         Ok(())
     } else {
         Err(std::io::Error::last_os_error())
+    }
+}
+
+struct InstalledBlock {
+    block: ProcessBlock,
+    _lock: File,
+}
+#[async_trait]
+impl Block for InstalledBlock {
+    async fn process(&self, packets: &[BlockPacket]) -> Result<Vec<BlockOutput>, RelayError> {
+        self.block.process(packets).await
     }
 }

@@ -3,14 +3,14 @@ use amitoki::{config::AppConfig, engine::EngineConfig};
 #[test]
 fn example_configuration_loads_without_database_credentials() {
     let config = AppConfig::load(std::path::Path::new("amitoki.example.toml")).unwrap();
-    assert_eq!(config.relay.plugin, "postgres");
+    assert_eq!(config.relay.unwrap().plugin, "postgres");
     assert_eq!(config.engine.batch_size, 128);
 }
 
 #[test]
 fn a_non_database_plugin_needs_no_postgres_configuration() {
     let config: AppConfig = toml::from_str("node_id='a'\nchannel='lan'\ninterface='eth0'\n[relay]\nplugin='memory'\n").unwrap();
-    assert_eq!(config.relay.options, serde_json::json!({}));
+    assert_eq!(config.relay.unwrap().options, serde_json::json!({}));
 }
 
 #[test]
@@ -33,4 +33,16 @@ fn zero_queue_capacity_or_busy_polling_is_rejected() {
     }
     .validate()
     .is_err());
+}
+
+#[test]
+fn exactly_one_runtime_configuration_must_be_selected() {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    let common = "node_id='a'\nchannel='lan'\ninterface='eth0'\n";
+    std::fs::write(file.path(), common).unwrap();
+    assert!(AppConfig::load(file.path()).is_err());
+    std::fs::write(file.path(), format!("{common}[relay]\nplugin='memory'\n[pipeline]\nroutes=[{{from='capture',to=[]}}]\n")).unwrap();
+    assert!(AppConfig::load(file.path()).is_err());
+    std::fs::write(file.path(), format!("{common}[pipeline]\nroutes=[{{from='capture',to=[]}}]\n")).unwrap();
+    assert!(AppConfig::load(file.path()).is_ok());
 }

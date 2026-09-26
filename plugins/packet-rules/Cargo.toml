@@ -1,0 +1,15 @@
+[package]
+name = "amitoki-block-packet-rules"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "amitoki-plugin-packet-rules"
+path = "src/main.rs"
+
+[dependencies]
+amitoki-plugin-sdk = { path = "../../crates/plugin-sdk" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt"] }

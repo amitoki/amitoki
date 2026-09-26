@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import socket
 import socketserver
+import raw_probe
 import struct
 import sys
 import threading
@@ -52,6 +53,7 @@ def serve():
     with socketserver.ThreadingTCPServer((address, TCP_PORT), TcpReceiver) as tcp:
         with socketserver.UDPServer((address, UDP_PORT), UdpReceiver) as udp:
             threading.Thread(target=tcp.serve_forever, daemon=True).start()
+            raw_probe.start_receiver()
             READY.touch()
             udp.serve_forever()
 
@@ -96,6 +98,10 @@ if __name__ == "__main__":
         print(json.dumps(tcp_transfer(sys.argv[2])))
     elif action in ("udp", "send-udp"):
         print(json.dumps(udp_transfer(sys.argv[2], sys.argv[3], await_echo=action == "udp")))
+    elif action == "raw":
+        print(json.dumps(raw_probe.send(sys.argv[2], sys.argv[3], int(sys.argv[4]))))
+    elif action == "raw-received":
+        print(json.dumps(raw_probe.received(sys.argv[2])))
     elif action == "received":
         print(json.dumps(received(sys.argv[2])))
     else:

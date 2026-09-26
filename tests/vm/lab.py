@@ -14,11 +14,13 @@ import scenarios
 from settings import NODES, ROOT, SSH_PORTS, STATE
 
 
-def up(relay):
+def up(relay, pipeline):
     subprocess.run(["cargo", "build", "--release", "--bin", "amitoki", "--locked"], cwd=ROOT, check=True)
     for plugin in ("postgres", "p2p"):
         subprocess.run(["cargo", "build", "--release", "--locked", "--manifest-path", f"plugins/{plugin}/Cargo.toml"], cwd=ROOT, check=True)
         subprocess.run([sys.executable, "scripts/package-plugin.py", f"plugins/{plugin}/target/release/amitoki-plugin-{plugin}", str(STATE / "packages" / plugin)], cwd=ROOT, check=True)
+    subprocess.run(["cargo", "build", "--release", "--locked", "-p", "amitoki-block-packet-rules"], cwd=ROOT, check=True)
+    subprocess.run([sys.executable, "scripts/package-plugin.py", "target/release/amitoki-plugin-packet-rules", str(STATE / "packages" / "packet-rules")], cwd=ROOT, check=True)
     identities = STATE / "identities"
     identities.mkdir(exist_ok=True)
     for node in NODES:
@@ -31,8 +33,9 @@ def up(relay):
         images.seed_guest(node, image)
         qemu.start(node)
         qemu.wait_ready(node)
-        remote.deploy(node, password, relay)
+        remote.deploy(node, password, relay, pipeline=pipeline)
     (STATE / "relay-mode").write_text(relay)
+    (STATE / "pipeline-mode").write_text("yes" if pipeline else "no")
     print("VMラボを起動しました。scripts/vm-lab testで通信を検証できます。", flush=True)
 
 
@@ -40,18 +43,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("up", "test", "status", "ssh", "down", "destroy"))
     parser.add_argument("node", nargs="?", choices=NODES)
-    parser.add_argument("--relay", choices=("postgres", "p2p"))
+    parser.add_argument("--relay", choices=("postgres", "p2p", "both"))
+    parser.add_argument("--pipeline", action=argparse.BooleanOptionalAction, default=None, help="解析・フィルタを含むブロック構成で起動")
     options = parser.parse_args()
     relay = options.relay or ((STATE / "relay-mode").read_text().strip() if (STATE / "relay-mode").exists() else "postgres")
+    pipeline = options.pipeline if options.pipeline is not None else ((STATE / "pipeline-mode").read_text().strip() == "yes" if (STATE / "pipeline-mode").exists() else False)
+    if relay == "both" and options.pipeline is False:
+        parser.error("bothはブロック構成専用です。単一中継には--relay postgresまたはp2pを指定してください")
+    pipeline = pipeline or relay == "both"
     os.umask(0o077)
     STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
     # up/down/testの同時実行でディスクやサービスを入れ替えない。
     with (STATE / "lab.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if options.action == "up":
-            up(relay)
+            up(relay, pipeline)
         elif options.action == "test":
-            scenarios.run_tests(relay)
+            scenarios.run_tests(relay, pipeline)
         elif options.action == "status":
             for node in NODES:
                 print(f"{node}: {'running' if qemu.is_running(node) else 'stopped'} (SSH 127.0.0.1:{SSH_PORTS[node]})")
@@ -73,7 +81,7 @@ def main():
                 for name in ("identities", "packages"):
                     if (STATE / name).exists():
                         shutil.rmtree(STATE / name)
-                for filename in ("id_ed25519", "id_ed25519.pub", "known_hosts", "postgres-password", "relay-mode"):
+                for filename in ("id_ed25519", "id_ed25519.pub", "known_hosts", "postgres-password", "relay-mode", "pipeline-mode"):
                     (STATE / filename).unlink(missing_ok=True)
 
 

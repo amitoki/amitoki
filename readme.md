@@ -2,6 +2,8 @@
 
 ネットワークの解析・デバッグ・通信実験に使うRust製ツール。Ethernetフレームを解析・フィルタリングし、設定で選んだ中継方式を通して別ノードへ送る。PostgreSQL・P2Pは外部プロセス型プラグインとして追加する。本体の再ビルドは不要。メモリ中継は同一プロセス内のテスト用として組み込んでいる。
 
+0.4.0では解析・フィルタも外部ブロックとして作成し、複数の中継先へ分岐できる。[ブロック構成の設計・使い方](docs/block-pipelines.md)と[設定例](amitoki.pipeline.example.toml)を参照する。
+
 Linux向け。まず以下の手順でビルドと設定を済ませる。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。
 
 [stegrdbのfeat/relay-plugins](https://github.com/aida0710/stegrdb/tree/feat/relay-plugins)の履歴を引き継いだ独立プロジェクト。名前は「網＋解き」。移行手順は[amitokiへの移行](docs/amitoki-migration.md)を参照する。

@@ -18,6 +18,14 @@ pub enum Request {
         context: RelayContext,
         options: Value,
     },
+    ConnectBlock {
+        protocol_version: u32,
+        context: crate::block::BlockContext,
+        options: Value,
+    },
+    Process {
+        packets: Vec<crate::block::BlockPacket>,
+    },
     Publish {
         frames: Vec<Frame>,
     },
@@ -34,6 +42,7 @@ pub enum Request {
 pub enum Response {
     Manifest(PluginManifest),
     Success,
+    Processed(Vec<crate::block::BlockOutput>),
     Deliveries(Vec<Delivery>),
     Error {
         message: String,
