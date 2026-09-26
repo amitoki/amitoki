@@ -33,10 +33,10 @@ flowchart LR
 cargo build --release --bin amitoki --locked
 cargo build --release -p amitoki-block-packet-rules --locked
 python3 scripts/package-plugin.py target/release/amitoki-plugin-packet-rules dist/packet-rules
-./target/release/amitoki plugin add --path dist/packet-rules
-./target/release/amitoki plugin describe packet-rules
-./target/release/amitoki plugin configure packet-rules --set log_every=128
-./target/release/amitoki plugin validate packet-rules
+./target/release/amitoki plugin block add ./dist/packet-rules
+./target/release/amitoki plugin block describe packet-rules
+./target/release/amitoki plugin block configure packet-rules --set log_every=128
+./target/release/amitoki plugin block validate packet-rules
 cp amitoki.pipeline.example.toml amitoki.toml
 ./target/release/amitoki --config amitoki.toml --check-config
 ```
@@ -104,7 +104,7 @@ SDK 0.2.0の`amitoki_plugin_sdk::block`を使う。RustのAPIは拡張したが�
 2. `BlockPlugin::connect(BlockContext, options)`でインスタンスを作る。コンテキストには本体のnode/channelとインスタンスIDが入る。
 3. `Block::process(&[BlockPacket])`で入力順に同じ件数の`BlockOutput`を返す。入力は読み取り用のFrameと解析結果。出力は`ports`と`annotations`だけ。ポートを空にすると破棄する。
 4. `--describe`でマニフェストをJSON出力し、`--stdio`で`serve_block`を動かす。stdoutは通信専用、ログはstderrへ出す。
-5. `scripts/package-plugin.py`で配布物を作り、`plugin add --path`で導入する。GitHub Releaseに同形式の配布物を置けば`plugin add owner/repository@tag`も使える。
+5. `scripts/package-plugin.py`で配布物を作り、`plugin block add ./dist/PLUGIN`で導入する。GitHub Releaseに同形式の配布物を置けば`plugin block add https://github.com/OWNER/REPOSITORY --version TAG`も使える。
 
 [packet-rulesの実装](../plugins/packet-rules/src/main.rs)が動作する例。IPCの追加メソッドは`connect_block`と`process`、応答は`processed`。長さ付きMessagePackなので、別言語でも実装できる。フレームやIDを出力に追加した応答、未定義ポート、出力件数の不一致、過大な解析結果を拒否する。
 
@@ -123,4 +123,4 @@ scripts/vm-lab test --relay both --pipeline
 
 3台にPostgreSQL・P2Pと3個のpacket-rulesインスタンスを配備する。ICMP/TCP/UDP、停止後の再配送、使用中の更新・削除拒否、本体バイナリ不変を調べる。実験用EtherTypeの通過・拒否と、両経路からの同じIDがNICへ重複注入されないこと、各子プロセスのcapability消去も確認する。
 
-`--relay postgres --pipeline`と`--relay p2p --pipeline`で単独中継も試せる。従来の構成は`--relay postgres --no-pipeline`または`--relay p2p --no-pipeline`。GUI・Webエディタ、パケット改変、リプレイ、経路ごとの永続チェックポイント、最大帯域測定は今回の実装には含まない。
+`--relay postgres --pipeline`と`--relay p2p --pipeline`で単独中継も試せる。従来の構成は`--relay postgres --no-pipeline`または`--relay p2p --no-pipeline`。PCAPによる単体テスト・経路トレースは[開発・デバッグ手順](plugin-development.md)を参照する。GUI・Webエディタ、パケット改変、経路ごとの永続チェックポイント、最大帯域測定は未実装。

@@ -1,5 +1,6 @@
 use super::{
     package::{target, MAX_BINARY_BYTES, MAX_MANIFEST_BYTES},
+    source::GithubSource,
     ManagerResult, Package,
 };
 use reqwest::{
@@ -23,20 +24,9 @@ struct Asset {
     size: u64,
 }
 
-pub async fn download(source: &str) -> ManagerResult<tempfile::TempDir> {
-    let (repository, version) = source.split_once('@').map_or((source, None), |(repository, version)| (repository, Some(version)));
-    let repository = match repository {
-        "postgres" => "amitoki/amitoki-plugin-postgres",
-        "p2p" => "amitoki/amitoki-plugin-p2p",
-        other => other,
-    };
-    let segments: Vec<_> = repository.split('/').collect();
-    if segments.len() != 2 || segments.iter().any(|part| part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))) {
-        return Err("取得先をowner/repository[@version]で指定してください".into());
-    }
-    if version.is_some_and(|tag| tag.is_empty() || !tag.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))) {
-        return Err("リリースタグが不正です".into());
-    }
+pub async fn download(source: &GithubSource) -> ManagerResult<tempfile::TempDir> {
+    let repository = &source.repository;
+    let version = source.version.as_deref();
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
     if let Ok(token) = std::env::var("AMITOKI_GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")) {
@@ -67,7 +57,7 @@ pub async fn download(source: &str) -> ManagerResult<tempfile::TempDir> {
     let binary = release.assets.iter().find(|asset| asset.name == binary_name).ok_or("リリースに実行ファイルがありません")?;
     download_asset(&client, binary, (&directory.path().join(&package.binary), MAX_BINARY_BYTES)).await?;
     package.verify(directory.path())?;
-    package.source = Some(repository.to_owned());
+    package.source = Some(source.recorded());
     std::fs::write(directory.path().join("plugin.json"), serde_json::to_vec_pretty(&package)?)?;
     Ok(directory)
 }

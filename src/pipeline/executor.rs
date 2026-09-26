@@ -1,8 +1,5 @@
 use super::{sources::Job, PipelineEngine};
-use crate::{
-    engine::{retry::retry_operation, EngineError},
-    packet::parse_frame,
-};
+use crate::engine::{retry::retry_operation, EngineError};
 use amitoki_plugin_sdk::wire::MAX_BATCH;
 use amitoki_relay::{Delivery, Frame};
 use std::{
@@ -88,7 +85,7 @@ async fn deliver(source: (&PipelineEngine, usize), deliveries: Vec<Delivery>, re
                 engine.pipeline_metrics.duplicates.fetch_add(1, Ordering::Relaxed);
                 return None;
             }
-            if !parse_frame(&frame.bytes).is_ok_and(|packet| engine.settings.firewall.allows(&packet)) {
+            if engine.settings.firewall.check_frame(&frame.bytes).is_err() {
                 engine.metrics.rejected_deliveries.fetch_add(1, Ordering::Relaxed);
                 return None;
             }

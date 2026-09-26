@@ -1,0 +1,32 @@
+# debug replay用。NICや中継への送信は行わない。
+node_id = "debug"
+channel = "debug"
+interface = "unused"
+
+[firewall]
+policy = "blacklist"
+rules = []
+
+[[pipeline.relays]]
+id = "output"
+plugin = "memory"
+
+[[pipeline.blocks]]
+id = "filter"
+plugin = "packet-rules"
+[pipeline.blocks.options]
+allowed_ether_types = [34998]
+label = "debug"
+
+[[pipeline.routes]]
+from = "capture"
+to = ["filter"]
+[[pipeline.routes]]
+from = "filter.pass"
+to = ["output"]
+[[pipeline.routes]]
+from = "filter.drop"
+to = []
+[[pipeline.routes]]
+from = "output.received"
+to = ["inject"]

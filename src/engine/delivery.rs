@@ -1,5 +1,4 @@
 use super::{retry::retry_operation, Engine, EngineError};
-use crate::packet::parse_frame;
 use amitoki_relay::{Delivery, RelayError};
 use log::warn;
 use std::{
@@ -38,7 +37,7 @@ async fn deliver(engine: &Engine, deliveries: Vec<Delivery>) -> Result<(), Engin
     let mut receipts = Vec::with_capacity(deliveries.len());
     let mut send_error = None;
     for delivery in deliveries {
-        if !parse_frame(&delivery.frame.bytes).is_ok_and(|packet| engine.firewall.allows(&packet)) {
+        if engine.firewall.check_frame(&delivery.frame.bytes).is_err() {
             engine.metrics.rejected_deliveries.fetch_add(1, Ordering::Relaxed);
             receipts.push(delivery.receipt);
             continue;

@@ -7,6 +7,7 @@ import time
 import uuid
 
 import block_checks
+import debug_checks
 import qemu
 import remote
 from settings import NODES, POLL_INTERVAL_SECONDS, PROBE_TIMEOUT_SECONDS, ROOT
@@ -135,6 +136,7 @@ def run_tests(relay, pipeline=False):
         report["connectivity"] = check_connectivity()
         if pipeline:
             report["blocks"] = block_checks.run(relay)
+            report["debug"] = debug_checks.run()
         report["offline_delivery"] = check_offline_delivery(relay)
         report["plugin_management"] = check_plugin_management(relay, pipeline)
         report["status"] = "passed"

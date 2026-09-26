@@ -21,6 +21,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if arguments.first().map(String::as_str) == Some("plugin") {
         return run_cli(&arguments[1..]).await;
     }
+    if arguments.first().map(String::as_str) == Some("debug") {
+        return amitoki::debug::run_cli(&arguments[1..]).await;
+    }
     let registry = builtin_plugins()?;
     let store = PluginStore::from_environment()?;
     if arguments == ["--list-plugins"] {
@@ -31,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if arguments == ["--help"] || arguments == ["-h"] {
-        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki plugin --help");
+        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki plugin --help\namitoki debug --help");
         return Ok(());
     }
     let mut path = PathBuf::from("amitoki.toml");

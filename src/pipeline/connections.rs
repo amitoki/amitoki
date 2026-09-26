@@ -41,6 +41,24 @@ impl PipelineConfig {
     pub async fn connect(&self, providers: (&PluginStore, &PluginRegistry), context: RelayContext) -> Result<Connections, Box<dyn std::error::Error>> {
         let (store, registry) = providers;
         let graph = self.check(store, &context)?;
+        let blocks = self.connect_blocks(store, &context).await?;
+        let mut relays = Vec::new();
+        for instance in &self.relays {
+            let context = RelayContext {
+                node_id: context.node_id.clone(),
+                channel: instance.channel.clone().unwrap_or_else(|| context.channel.clone()),
+            };
+            let relay = if registry.names().contains(&instance.plugin.as_str()) {
+                registry.connect(&instance.plugin, context, instance.options.clone()).await?
+            } else {
+                store.connect(&instance.plugin, context, instance.options.clone()).await?
+            };
+            relays.push(relay);
+        }
+        Ok(Connections { graph, blocks, relays })
+    }
+
+    pub(crate) async fn connect_blocks(&self, store: &PluginStore, context: &RelayContext) -> Result<Vec<RunningBlock>, Box<dyn std::error::Error>> {
         let mut blocks = Vec::new();
         for instance in &self.blocks {
             let definition = Package::load(&store.plugin_path(&instance.plugin)?)?.manifest.block.ok_or("ブロックの定義がありません")?;
@@ -60,19 +78,6 @@ impl PipelineConfig {
                 on_error: instance.on_error,
             });
         }
-        let mut relays = Vec::new();
-        for instance in &self.relays {
-            let context = RelayContext {
-                node_id: context.node_id.clone(),
-                channel: instance.channel.clone().unwrap_or_else(|| context.channel.clone()),
-            };
-            let relay = if registry.names().contains(&instance.plugin.as_str()) {
-                registry.connect(&instance.plugin, context, instance.options.clone()).await?
-            } else {
-                store.connect(&instance.plugin, context, instance.options.clone()).await?
-            };
-            relays.push(relay);
-        }
-        Ok(Connections { graph, blocks, relays })
+        Ok(blocks)
     }
 }

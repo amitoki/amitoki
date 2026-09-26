@@ -20,5 +20,5 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo test -p amitoki --no-default-features --locked
       - run: bash scripts/test-network.sh
-      - run: python3 -m py_compile tests/vm/*.py tests/vm/guest/*.py
+      - run: python3 -m py_compile tests/vm/*.py tests/vm/guest/*.py scripts/package-plugin.py scripts/create-debug-capture.py
       - run: bash -n scripts/vm-lab tests/vm/guest/*.sh
