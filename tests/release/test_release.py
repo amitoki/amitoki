@@ -94,6 +94,18 @@ class PublishingTests(unittest.TestCase):
             self.assertTrue(any("upload" in command for command in commands))
             self.assertFalse(any("--draft=false" in command for command in commands))
 
+    def test_only_a_complete_matching_upload_is_published(self):
+        names = [name for target in metadata.TARGETS for name in metadata.filenames(metadata.version(), target)] + ["SHA256SUMS"]
+        uploaded = {"assets": [{"name": name, "digest": "sha256:hash"} for name in names]}
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.object(publish, "release_preflight", return_value=("commit", Path("notes"))), \
+                patch.object(publish, "verify_target", return_value=""), \
+                patch.object(publish, "digest", return_value="hash"), \
+                patch.object(publish, "output", return_value=json.dumps(uploaded)), \
+                patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":true}')) as run:
+            publish.publish(Path(temporary), "v0.4.0", "example/repository")
+            self.assertIn("--draft=false", run.call_args.args[0])
+
 
 if __name__ == "__main__":
     unittest.main()

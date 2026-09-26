@@ -101,11 +101,16 @@ impl Drop for RunningWatch {
 fn once_keeps_build_logs_out_of_json_and_tests_a_local_copy() {
     let lab = WatchLab::new();
     fs::rename(lab.root.path().join("bundle"), lab.root.path().join("seed")).unwrap();
-    let output = lab.build_command("cp -R seed bundle\necho build-output\n").arg("--once").output().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let log = lab.root.path().join("build.log");
+    let output = lab.build_command("cp -R seed bundle\necho build-output\n").arg("--once").stderr(fs::File::create(&log).unwrap()).output().unwrap();
+    let log = fs::read_to_string(log).unwrap();
+    assert!(output.status.success(), "{log}");
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["terminals"][0], "output:pass");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("build-output"));
+    assert_eq!(
+        log.lines().collect::<Vec<_>>(),
+        ["[watch] run=1 status=started", "build-output", "[watch] run=1 status=passed"]
+    );
     assert!(!lab.root.path().join("store").exists());
 }
 

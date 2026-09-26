@@ -2,6 +2,7 @@
 use crate::plugin_manager::ManagerResult;
 use std::{
     ffi::OsString,
+    os::fd::AsFd,
     process::{ExitStatus, Stdio},
     time::Duration,
 };
@@ -32,7 +33,8 @@ pub(super) async fn run(command: &ProcessCommand, shutdown: &CancellationToken) 
     process.args(&command.arguments).stdin(Stdio::null()).stderr(Stdio::inherit()).process_group(0).kill_on_drop(true);
     // JSONLのテスト結果と、ビルドツールのログを混ぜない。
     if command.build {
-        let stderr = std::fs::OpenOptions::new().write(true).open("/dev/stderr")?;
+        // /dev/stderrを開き直すと、ファイルへリダイレクトした場合に先頭から上書きしてしまう。
+        let stderr = std::io::stderr().as_fd().try_clone_to_owned()?;
         process.stdout(Stdio::from(stderr));
     } else {
         process.stdout(Stdio::inherit());
