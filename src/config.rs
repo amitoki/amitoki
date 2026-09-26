@@ -12,7 +12,8 @@ pub struct AppConfig {
     pub interface: String,
     #[serde(default)]
     pub promiscuous: bool,
-    pub relay: RelayConfig,
+    pub relay: Option<RelayConfig>,
+    pub pipeline: Option<crate::pipeline::PipelineConfig>,
     #[serde(default)]
     pub engine: EngineConfig,
     #[serde(default)]
@@ -35,6 +36,12 @@ impl AppConfig {
     pub fn load(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let text = std::fs::read_to_string(path)?;
         let config: Self = toml::from_str(&text).map_err(|error| format!("設定ファイルが不正です: {}", error.message()))?;
+        if config.relay.is_some() == config.pipeline.is_some() {
+            return Err("relayとpipelineのどちらか一方を指定してください".into());
+        }
+        if let Some(pipeline) = &config.pipeline {
+            pipeline.validate()?;
+        }
         config.context().validate()?;
         config.engine.validate()?;
         if config.interface.is_empty() || config.interface.as_bytes().contains(&0) {

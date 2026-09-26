@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "amitoki"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "amitoki-plugin-sdk",
  "amitoki-relay",
@@ -68,12 +68,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "amitoki-plugin-sdk"
+name = "amitoki-block-packet-rules"
 version = "0.1.0"
+dependencies = [
+ "amitoki-plugin-sdk",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "amitoki-plugin-sdk"
+version = "0.2.0"
 dependencies = [
  "amitoki-relay",
  "async-trait",
  "jsonschema",
+ "libc",
  "rmp-serde",
  "serde",
  "serde_json",

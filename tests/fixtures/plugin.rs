@@ -47,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         version: "0.1.0".into(),
         protocol_version: PROTOCOL_VERSION,
         description: String::new(),
+        block: None,
         config_schema: json!({"type":"object","additionalProperties":false}),
     };
     if std::env::args().any(|argument| argument == "--describe") {

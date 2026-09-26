@@ -1,0 +1,74 @@
+# PostgreSQLを経由する最小構成。packet-rulesを先に追加する（docs/block-pipelines.md）。
+node_id = "node-a"
+channel = "lab"
+interface = "eth1"
+
+# 本体の共通フィルタはブロックより先に適用される。
+[firewall]
+policy = "whitelist"
+rules = [
+  { type = "EtherType", value = 2048 },
+  { type = "EtherType", value = 2054 },
+  { type = "EtherType", value = 34525 },
+]
+
+[[pipeline.relays]]
+id = "database"
+plugin = "postgres"
+[pipeline.relays.options]
+connection_env = "AMITOKI_POSTGRES_URL"
+
+[[pipeline.blocks]]
+id = "outbound"
+plugin = "packet-rules"
+[pipeline.blocks.options]
+allowed_ether_types = [2048, 2054]
+label = "outbound"
+
+# 同じパッケージを別設定・別プロセスで実行する。
+[[pipeline.blocks]]
+id = "inbound"
+plugin = "packet-rules"
+[pipeline.blocks.options]
+allowed_ether_types = [2048, 2054]
+label = "inbound"
+
+[[pipeline.blocks]]
+id = "observe"
+plugin = "packet-rules"
+on_error = "drop_branch"
+[pipeline.blocks.options]
+label = "observation"
+log_every = 128
+
+[[pipeline.routes]]
+from = "capture"
+to = ["outbound", "observe"]
+
+[[pipeline.routes]]
+from = "outbound.pass"
+to = ["database"]
+
+[[pipeline.routes]]
+from = "outbound.drop"
+to = []
+
+[[pipeline.routes]]
+from = "observe.pass"
+to = []
+
+[[pipeline.routes]]
+from = "observe.drop"
+to = []
+
+[[pipeline.routes]]
+from = "database.received"
+to = ["inbound"]
+
+[[pipeline.routes]]
+from = "inbound.pass"
+to = ["inject"]
+
+[[pipeline.routes]]
+from = "inbound.drop"
+to = []

@@ -6,6 +6,7 @@ import json
 import time
 import uuid
 
+import block_checks
 import qemu
 import remote
 from settings import NODES, POLL_INTERVAL_SECONDS, PROBE_TIMEOUT_SECONDS, ROOT
@@ -43,7 +44,7 @@ def prepare_receivers(relay):
                         "/usr/bin/python3 /opt/amitoki-lab/probe.py serve")
         wait_for(lambda: remote.run(node, "test -f /run/amitoki-probe.ready", check=False).returncode == 0,
                  f"VM {node}の受信サーバが起動していません")
-    if relay == "postgres":
+    if relay in ("postgres", "both"):
         wait_for(lambda: database_count("SELECT count(*) FROM stegrdb_relay.nodes WHERE channel='vm-lab'") == 3,
                  "3ノードの登録が揃いません")
 
@@ -87,18 +88,29 @@ def check_offline_delivery(relay):
     return {"recovered_udp_packets": len(expected), "payload_sha256_verified": True}
 
 
-def check_plugin_management(relay):
+def check_plugin_management(relay, pipeline):
     command = "sudo -u amitoki /opt/amitoki-lab/amitoki plugin --directory /opt/amitoki-lab/plugins"
     before = remote.run("a", "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0]
-    assert remote.run("a", f"{command} remove {relay}", check=False).returncode != 0
-    assert remote.run("a", f"{command} update {relay} --path /opt/amitoki-lab/packages/{relay}", check=False).returncode != 0
-    inactive = "postgres" if relay == "p2p" else "p2p"
-    remote.run("a", f"{command} remove {inactive}")
-    remote.run("a", f"{command} add --path /opt/amitoki-lab/packages/{inactive}")
-    if inactive == "postgres":
-        remote.run("a", f"{command} configure postgres --set max_connections=4")
-        remote.run("a", f"{command} validate postgres")
-        assert remote.run("a", f"{command} configure postgres --set max_connections=0", check=False).returncode != 0
+    active = ["postgres", "p2p"] if relay == "both" else [relay]
+    if pipeline:
+        active.append("packet-rules")
+    for plugin in active:
+        assert remote.run("a", f"{command} remove {plugin}", check=False).returncode != 0
+        assert remote.run("a", f"{command} update {plugin} --path /opt/amitoki-lab/packages/{plugin}", check=False).returncode != 0
+    inactive = next((plugin for plugin in ("postgres", "p2p", "packet-rules") if plugin not in active), None)
+    if inactive is None:
+        # 両中継が動いている試験では、1台を停止してブロックだけ追加し直す。
+        remote.run("a", "sudo systemctl stop amitoki")
+        inactive = "packet-rules"
+    try:
+        remote.run("a", f"{command} remove {inactive}")
+        remote.run("a", f"{command} add --path /opt/amitoki-lab/packages/{inactive}")
+        if inactive == "postgres":
+            remote.run("a", f"{command} configure postgres --set max_connections=4")
+            remote.run("a", f"{command} validate postgres")
+            assert remote.run("a", f"{command} configure postgres --set max_connections=0", check=False).returncode != 0
+    finally:
+        remote.run("a", "sudo systemctl start amitoki")
     after = remote.run("a", "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0]
     assert before == after, "プラグインの追加削除で本体が変更されています"
     with (ROOT / "target/release/amitoki").open("rb") as stream:
@@ -110,19 +122,21 @@ def check_plugin_management(relay):
             "inactive_remove_and_add": True, "core_sha256_unchanged": before, "cargo_absent_on_guests": True}
 
 
-def run_tests(relay):
+def run_tests(relay, pipeline=False):
     timestamp = datetime.now().astimezone()
     destination = ROOT / "artifacts/vm" / timestamp.strftime("%Y-%m-%d/%H%M%S")
     destination.mkdir(parents=True)
-    report = {"started_at": timestamp.isoformat(), "status": "failed", "relay": relay}
+    report = {"started_at": timestamp.isoformat(), "status": "failed", "relay": relay, "pipeline": pipeline}
     try:
         if relay == "p2p":
             remote.run("a", "sudo systemctl stop postgresql")
             report["postgres_stopped"] = True
         prepare_receivers(relay)
         report["connectivity"] = check_connectivity()
+        if pipeline:
+            report["blocks"] = block_checks.run(relay)
         report["offline_delivery"] = check_offline_delivery(relay)
-        report["plugin_management"] = check_plugin_management(relay)
+        report["plugin_management"] = check_plugin_management(relay, pipeline)
         report["status"] = "passed"
         print("3台のVM: ICMP・TCP・UDP・停止後の再配送が成功しました", flush=True)
     finally:

@@ -4,7 +4,7 @@ use log::warn;
 use std::{future::Future, sync::atomic::Ordering};
 use tokio::time::{sleep, timeout};
 
-pub(super) async fn retry_operation<F, Operation>(operation: F, config: &EngineConfig, metrics: &Metrics) -> Result<(), RelayError>
+pub(crate) async fn retry_operation<F, Operation>(operation: F, config: &EngineConfig, metrics: &Metrics) -> Result<(), RelayError>
 where
     F: Fn() -> Operation,
     Operation: Future<Output = Result<(), RelayError>>,

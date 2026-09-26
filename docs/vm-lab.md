@@ -1,5 +1,7 @@
 # 3台のVMで中継を試す
 
+解析・フィルタを含む構成は`up --relay both --pipeline`と`test --relay both --pipeline`で検証できる。単独方式の`--pipeline`、旧構成の`--no-pipeline`にも対応する。詳細は[ブロック構成](block-pipelines.md)。
+
 `scripts/vm-lab up`でUbuntu 24.04のVMを3台作り、ビルドしたamitokiを配備する。`scripts/vm-lab test`で、VMをまたぐICMP・TCP・UDPと、ノード停止中にDBへ蓄積したフレームの再配送を確認する。
 
 ホストはx86_64 Linux、Python 3.11以降、QEMU/KVMを使う。各VMは2vCPU・2GiBメモリ・12GiBの仮想ディスクを持つ。ディスクは差分形式なので、未使用領域の12GiBを最初から消費しない。

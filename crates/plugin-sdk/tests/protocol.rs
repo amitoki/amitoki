@@ -27,6 +27,7 @@ fn invalid_options_are_rejected_without_echoing_secret_values() {
         version: "1.0.0".into(),
         protocol_version: PROTOCOL_VERSION,
         description: String::new(),
+        block: None,
         config_schema: serde_json::json!({"type":"object", "additionalProperties":false, "properties":{"count":{"type":"integer","minimum":1}}}),
     };
     assert!(manifest.validate_options(&serde_json::json!({"count":2})).is_ok());

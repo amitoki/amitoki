@@ -3,7 +3,7 @@ mod config;
 mod delivery;
 mod metrics;
 mod publish;
-mod retry;
+pub(crate) mod retry;
 
 use crate::{firewall::Firewall, network::PacketIo};
 use amitoki_relay::{Relay, RelayError};
@@ -85,7 +85,7 @@ pub struct EngineSettings {
     pub config: EngineConfig,
 }
 
-fn worker_failure(completed: Option<Result<Result<(), EngineError>, tokio::task::JoinError>>) -> EngineError {
+pub(crate) fn worker_failure(completed: Option<Result<Result<(), EngineError>, tokio::task::JoinError>>) -> EngineError {
     match completed {
         Some(Ok(Err(error))) => error,
         Some(Err(error)) => EngineError::Worker(error.to_string()),

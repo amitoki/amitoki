@@ -27,7 +27,7 @@ def run(node, command, *, input_text=None, check=True, timeout=REMOTE_TIMEOUT_SE
     )
 
 
-def deploy(node, password, relay):
+def deploy(node, password, relay, *, pipeline=False):
     from settings import DATABASE_PORT
 
     directory = STATE / node
@@ -42,16 +42,16 @@ def deploy(node, password, relay):
     )
     environment.chmod(0o600)
     configuration = directory / "amitoki.toml"
-    configuration.write_text(relay_configuration(node, relay))
+    configuration.write_text(relay_configuration(node, relay, pipeline))
     archive = directory / "deploy.tar"
     with tarfile.open(archive, "w") as bundle:
-        for filename in ("configure.sh", "network.sh", "probe.py", "amitoki.service", "amitoki-network.service"):
+        for filename in ("configure.sh", "network.sh", "probe.py", "raw_probe.py", "amitoki.service", "amitoki-network.service"):
             bundle.add(ROOT / "tests/vm/guest" / filename, arcname=filename)
         bundle.add(ROOT / "target/release/amitoki", arcname="amitoki")
         bundle.add(ROOT / "plugins/postgres/schema.sql", arcname="schema.sql")
         bundle.add(environment, arcname="postgres.env")
         bundle.add(configuration, arcname="amitoki.toml")
-        for plugin in ("postgres", "p2p"):
+        for plugin in ("postgres", "p2p", "packet-rules"):
             for filename in ("plugin.json", f"amitoki-plugin-{plugin}"):
                 bundle.add(STATE / "packages" / plugin / filename, arcname=f"packages/{plugin}/{filename}")
         bundle.add(STATE / "identities" / node / "key.der", arcname="identity/key.der")

@@ -1,18 +1,19 @@
 [workspace]
-members = ["crates/relay", "crates/plugin-sdk", "plugins/memory"]
+members = ["crates/relay", "crates/plugin-sdk", "plugins/memory", "plugins/packet-rules"]
 exclude = ["plugins/postgres", "plugins/p2p"]
 resolver = "2"
 
 [package]
 name = "amitoki"
 default-run = "amitoki"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["相田 優希 <51500566+aida0710@users.noreply.github.com>"]
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
 bytes = "1"
+uuid = { version = "1", features = ["v4"] }
 dotenv = "0.15"
 env_logger = "0.11"
 libc = "0.2"
@@ -43,4 +44,9 @@ harness = false
 [[bin]]
 name = "amitoki-test-plugin"
 path = "tests/fixtures/plugin.rs"
+test = false
+
+[[bin]]
+name = "amitoki-test-block"
+path = "tests/fixtures/block.rs"
 test = false
