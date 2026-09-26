@@ -5,6 +5,7 @@ mod pcap;
 mod replay;
 mod report;
 mod runner;
+pub mod watch;
 
 use crate::plugin_manager::{source::expand_path, ManagerResult, PluginStore};
 pub use block_test::test_block;

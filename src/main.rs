@@ -18,6 +18,10 @@ use tokio_util::sync::CancellationToken;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments == ["--version"] || arguments == ["-V"] {
+        println!("amitoki {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     if arguments.first().map(String::as_str) == Some("plugin") {
         return run_cli(&arguments[1..]).await;
     }
@@ -34,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if arguments == ["--help"] || arguments == ["-h"] {
-        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki plugin --help\namitoki debug --help");
+        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki --version\namitoki plugin --help\namitoki debug --help");
         return Ok(());
     }
     let mut path = PathBuf::from("amitoki.toml");

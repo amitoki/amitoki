@@ -1,24 +1,112 @@
-name: Rust
+name: CI and release
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  check:
+    name: Lint and isolated network tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          components: rustfmt, clippy
+          python-version: '3.12'
+      - run: rustup show
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: bash scripts/test-network.sh
+      - run: python3 -m unittest discover -s tests/release -v
+      - run: python3 -m py_compile tests/vm/*.py tests/vm/guest/*.py scripts/*.py scripts/release/*.py
+      - run: bash -n scripts/vm-lab scripts/*.sh tests/vm/guest/*.sh
+
+  package:
+    name: Test and package (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: rustup show
+      - run: sudo apt-get update && sudo apt-get install -y dpkg-dev
       - run: cargo test --workspace --locked
       - run: cargo test -p amitoki --no-default-features --locked
-      - run: bash scripts/test-network.sh
-      - run: python3 -m py_compile tests/vm/*.py tests/vm/guest/*.py scripts/package-plugin.py scripts/create-debug-capture.py
-      - run: bash -n scripts/vm-lab tests/vm/guest/*.sh
+      - run: cargo build --release --bin amitoki --locked
+      - run: bash scripts/build-packet-rules.sh
+      - name: Package and verify both distribution formats
+        env:
+          RELEASE_TARGET: ${{ matrix.target }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          python3 scripts/release/package.py --target "$RELEASE_TARGET"
+          python3 scripts/release/verify.py dist/release --target "$RELEASE_TARGET" --commit "$RELEASE_COMMIT"
+      - name: Exercise the archived executable
+        run: |
+          mkdir -p artifacts/release-extracted
+          tar -xzf dist/release/amitoki-*.tar.gz -C artifacts/release-extracted --strip-components=1
+          python3 scripts/release/smoke.py --binary artifacts/release-extracted/amitoki --plugin dist/packet-rules
+      - name: Install, exercise and remove the deb
+        run: |
+          sudo apt-get install -y ./dist/release/amitoki_*.deb
+          python3 scripts/release/smoke.py --binary /usr/bin/amitoki --plugin dist/packet-rules
+          sudo dpkg --remove amitoki
+          test ! -e /usr/bin/amitoki
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/release/*.tar.gz
+            dist/release/*.deb
+            dist/release/SHA256SUMS-*.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish version tag
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    needs: [check, package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: dist/release
+          merge-multiple: true
+      - name: Verify tag, main ancestry and uploaded assets before publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/release/publish.py --directory dist/release --tag "$RELEASE_TAG" --repository "$RELEASE_REPOSITORY"

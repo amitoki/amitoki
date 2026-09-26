@@ -97,4 +97,43 @@ python3 scripts/create-debug-capture.py artifacts/debug/sample.pcap
 
 `--json`は1パケット1行のJSONLをstdoutへ出す。処理時間を除く結果を入力順に比較し、入力のSHA256・時刻・拒否理由・経路・解析結果・最終送信先・エラー・件数の違いを検出する。ブロック内で現在時刻や乱数を解析結果に入れれば差分になる。結果には解析した内容が含まれるので、公開する前に内容を確認する。
 
-今回の範囲はブロック単体と経路の検証。中継の実通信・再配送は[VM試験](vm-lab.md)で確認する。自動ビルドを行う`watch`、PCAPNG、GUIによる編集、ホットリロードは未実装。
+今回の範囲はブロック単体と経路の検証。中継の実通信・再配送は[VM試験](vm-lab.md)で確認する。PCAPNG、GUIによる編集、稼働中パイプラインのホットリロードは未実装。
+
+## 保存するたびにビルドして試す
+
+ローカルのブロック開発では`watch`を使う。最初に1回実行し、以降はソースやPCAPの変更でビルド・単体テストを繰り返す。
+
+```bash
+# 本体は最初にビルドしておく。
+cargo build --release --bin amitoki --locked
+mkdir -p artifacts/debug
+# sample.pcapがまだなければ作成する。
+python3 scripts/create-debug-capture.py artifacts/debug/sample.pcap
+./target/release/amitoki plugin block watch ./dist/packet-rules \
+  --pcap artifacts/debug/sample.pcap \
+  --watch ./plugins/packet-rules --watch ./crates/plugin-sdk \
+  --watch ./Cargo.lock --watch ./Cargo.toml \
+  --build ./scripts/build-packet-rules.sh \
+  --set 'allowed_ether_types=[34998]'
+```
+
+`--build`は指定したプログラムを実行する。シェル展開はしない。引数は`--build-arg=value`を繰り返して渡す。参考スクリプトはプラグインだけをビルドし、`plugin.json`と実行ファイルを`dist/packet-rules`へ配置する。本体は再ビルドしない。別の言語でも、同じ配布形式を作るスクリプトを指定できる。
+
+ビルドする場合は`--watch`でソースを指定する。配布ディレクトリは初回ビルドで作ってよい。ビルドしない場合は`--build`を省略し、配布ディレクトリの変更を監視する。PCAPはどちらの場合も監視する。対象はローカルの配布ディレクトリに限る。相対・絶対・`~`のパスを使える。
+
+保存が続く間は既定200ms待ってまとめ、ビルド・テストは直列に実行する。実行中の変更は次の実行に回す。ビルド失敗時は古い配布物をテストせず、エラーを表示して次の変更を待つ。各回で新しいプロセスを起動し、一時コピーでテストする。
+
+監視対象配下の`.git`・`target`・`dist`・`artifacts`・`node_modules`・`.vm-lab`・`__pycache__`の変更を無視する。ビルド時は出力先の配布ディレクトリも除外する。追加の出力先は`--exclude PATH`で除外する。監視の登録数を抑えるため、巨大なリポジトリ全体より必要なソースディレクトリを指定する。監視中にディレクトリ自体を移動・削除した場合はwatchを再起動する。
+
+`--debounce-ms`で待ち時間を変更できる。ビルドとテストの期限は各300秒、`--timeout-seconds`で最大3600秒まで変更できる。Ctrl+C・SIGTERM・期限超過では実行中のプロセスグループを停止する。自分で別セッションへ離脱するデーモンをビルドスクリプトから起動しない。
+
+`--json`ではテスト結果だけをstdoutへ、実行番号・成否・ビルドログをstderrへ出す。結果は実行ごとに追記されるので、1回分を比較用に保存するときは`--once`を使う。
+
+```bash
+./target/release/amitoki plugin block watch ./dist/packet-rules \
+  --pcap artifacts/debug/sample.pcap \
+  --watch ./plugins/packet-rules --build ./scripts/build-packet-rules.sh \
+  --once --json > artifacts/debug/checked.jsonl
+```
+
+`--once`は最初の1回で終了し、ビルド・テスト失敗は非0を返す。通常のwatchでは失敗後も待機を続ける。このテストは結果を表示し、実行・通信仕様の異常を検出する。期待する通過・破棄の判定もCIに組み込む場合は、`debug compare`で保存済みの期待結果と比較する。
