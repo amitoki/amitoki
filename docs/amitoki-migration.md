@@ -12,6 +12,8 @@ amitoki（あみとき）は、ネットワークの解析・デバッグ・通�
 
 プラグインは既存リポジトリをOrganizationへ移管して公開する。stegrdb名のPostgreSQL v0.1.1、P2P v0.1.0とそれ以前のタグ・配布物は保持する。新しい版にはamitoki名の実行ファイルを含める。公式プラグインの取得にGitHubトークンは不要。
 
+旧stegrdb本体を継続する場合は`stegrdb plugin add postgres@v0.1.1`と`stegrdb plugin add p2p@v0.1.0`で旧版を指定する。最新版はamitoki用の実行ファイル名なので、旧本体からバージョンを指定せずに追加・更新しない。
+
 ## 設定とプラグイン
 
 1. 既存の中継プロセスを停止する。
@@ -49,3 +51,11 @@ PostgreSQLの`connection_env`とP2P discoveryの`token_env`は任意の環境変
 - P2Pのノード占有ディレクトリ`/tmp/stegrdb-p2p-<uid>`とRedisキーの`stegrdb:room:`も共有し、多重起動・ID衝突を同じ範囲で検証する。
 
 過去の検証文書には、実施時点のstegrdb名・privateリポジトリ・コミットをそのまま記載している。現在の名称と配置はこの文書を参照する。
+
+## 移行時の検証（2026-09-26）
+
+Rust・Nodeの試験44件、fmt・Clippy、Next.js production buildが成功した。GitHubの認証情報を外してsubmodule込みのclone、公式Releaseからの追加・バージョン指定更新・設定検証・削除を確認した。旧stegrdb本体でもPostgreSQL v0.1.1とP2P v0.1.0の取得が成功した。
+
+Ubuntu 24.04のVMを3台新規作成し、PostgreSQL・P2Pの両方式でa→b、b→c、c→aのICMP各3回、TCP各2MiB、UDP各64件の到達と内容一致を確認した。ノード停止中のUDP64件も再起動後に届き、使用中のプラグイン更新・削除を拒否した。プラグイン操作前後の本体SHA256は一致し、ゲストにはCargoを入れていない。
+
+ローカル試験記録: `artifacts/vm/2026-09-26/194007`（postgres）、`artifacts/vm/2026-09-26/194051`（p2p）。公開取得試験は`artifacts/migration/2026-09-26/public-install.json`。試験記録はGitから除外している。
