@@ -52,10 +52,10 @@ pub(crate) struct Planner<'a> {
 }
 
 impl PipelineEngine {
-    pub(super) async fn prepare(&self, frames: &[Frame], entry: &[Destination]) -> Result<Plan, RelayError> {
+    pub(super) async fn prepare(&self, generation: &super::generation::Generation, frames: &[Frame], entry: &[Destination]) -> Result<Plan, RelayError> {
         Planner {
-            graph: &self.graph,
-            blocks: &self.blocks,
+            graph: &generation.graph,
+            blocks: &generation.blocks,
             metrics: &self.pipeline_metrics,
             operation_timeout: self.settings.config.operation_timeout(),
         }

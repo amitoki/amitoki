@@ -45,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = PluginManifest {
         name: "fixture".into(),
         version: "0.1.0".into(),
+        packets: vec![],
         protocol_version: PROTOCOL_VERSION,
         description: String::new(),
         block: None,

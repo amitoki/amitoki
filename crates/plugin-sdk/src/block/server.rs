@@ -42,6 +42,15 @@ async fn dispatch(definition: (&impl BlockPlugin, &PluginManifest), block: &mut 
             *block = Some(plugin.connect(context, options).await?);
             Ok(Response::Success)
         },
+        Request::Generate(request) => {
+            if block.is_none() {
+                return Err(RelayError::permanent("Stageが未接続です"));
+            }
+            crate::generation::validate_request(manifest, &request)?;
+            let packets = plugin.generate(&request)?;
+            crate::generation::validate_packets(&request, &packets)?;
+            Ok(Response::Generated(packets))
+        },
         Request::Process { packets } if packets.len() <= MAX_BATCH => {
             for packet in &packets {
                 packet.validate()?;

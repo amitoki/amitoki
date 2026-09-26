@@ -26,6 +26,7 @@ pub enum Request {
     Process {
         packets: Vec<crate::block::BlockPacket>,
     },
+    Generate(amitoki_packet::GenerateRequest),
     Publish {
         frames: Vec<Frame>,
     },
@@ -44,6 +45,7 @@ pub enum Response {
     Success,
     Processed(Vec<crate::block::BlockOutput>),
     Deliveries(Vec<Delivery>),
+    Generated(Vec<Vec<u8>>),
     Error {
         message: String,
         retryable: bool,

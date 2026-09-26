@@ -8,3 +8,5 @@ pub mod pipeline;
 pub mod plugin_manager;
 pub mod plugins;
 pub mod runtime;
+
+pub mod control;

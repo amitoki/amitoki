@@ -1,0 +1,91 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashSet;
+
+// 接続数とグラフ展開数の上限はプラグインから変更できない。
+pub const MAX_RELAYS: usize = 16;
+pub const MAX_BLOCKS: usize = 32;
+pub const MAX_ROUTES: usize = 128;
+pub const MAX_VISITS: usize = 128;
+// 設定の識別子とIPCのポート名で、同じ文字列上限を使う。
+const MAX_IDENTIFIER_BYTES: usize = 64;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PipelineConfig {
+    #[serde(default)]
+    pub relays: Vec<RelayInstance>,
+    #[serde(default)]
+    #[serde(rename = "stages", alias = "blocks")]
+    pub blocks: Vec<Stage>,
+    pub routes: Vec<Route>,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RelayInstance {
+    pub id: String,
+    pub plugin: String,
+    /// 同じプラグインを別のchannelで利用する場合に指定する。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    #[serde(default = "empty_options")]
+    pub options: Value,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Stage {
+    pub id: String,
+    pub plugin: String,
+    #[serde(default = "empty_options")]
+    pub options: Value,
+    #[serde(default)]
+    pub on_error: ErrorPolicy,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorPolicy {
+    #[default]
+    Stop,
+    DropBranch,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Route {
+    pub from: String,
+    pub to: Vec<String>,
+}
+fn empty_options() -> Value {
+    serde_json::json!({})
+}
+
+impl PipelineConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.relays.len() > MAX_RELAYS || self.blocks.len() > MAX_BLOCKS || self.routes.len() > MAX_ROUTES {
+            return Err("中継16個・ブロック32個・経路128個の上限を超えています".into());
+        }
+        let mut names = HashSet::new();
+        for id in self.relays.iter().map(|relay| &relay.id).chain(self.blocks.iter().map(|block| &block.id)) {
+            if !valid_identifier(id) || matches!(id.as_str(), "capture" | "inject") || !names.insert(id) {
+                return Err(format!("インスタンス名が不正・予約済み・重複しています: {id}"));
+            }
+        }
+        let mut sources = HashSet::new();
+        for route in &self.routes {
+            let destinations: HashSet<_> = route.to.iter().collect();
+            if !sources.insert(&route.from) || destinations.len() != route.to.len() || route.to.len() > MAX_VISITS {
+                return Err(format!("経路の重複または分岐上限超過: {}", route.from));
+            }
+            for destination in &route.to {
+                if destination != "inject" && !names.contains(destination) {
+                    return Err(format!("接続先がありません: {destination}"));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Pipelineの識別子はIPCのポート名にも使用する。
+pub fn valid_identifier(value: &str) -> bool {
+    value.len() <= MAX_IDENTIFIER_BYTES && !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_')
+}

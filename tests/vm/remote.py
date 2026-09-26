@@ -54,6 +54,8 @@ def deploy(node, password, relay, *, pipeline=False):
         for plugin in ("postgres", "p2p", "packet-rules"):
             for filename in ("plugin.json", f"amitoki-plugin-{plugin}"):
                 bundle.add(STATE / "packages" / plugin / filename, arcname=f"packages/{plugin}/{filename}")
+        for filename in ("plugin.json", "amitoki-plugin-telemetry"):
+            bundle.add(ROOT / "dist/telemetry" / filename, arcname=f"packages/telemetry/{filename}")
         bundle.add(STATE / "identities" / node / "key.der", arcname="identity/key.der")
         for peer in ("a", "b", "c"):
             bundle.add(STATE / "identities" / peer / "cert.der", arcname=f"identity/{peer}.der")

@@ -92,26 +92,22 @@ def check_offline_delivery(relay):
 def check_plugin_management(relay, pipeline):
     command = "sudo -u amitoki /opt/amitoki-lab/amitoki plugin --directory /opt/amitoki-lab/plugins"
     before = remote.run("a", "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0]
-    active = ["postgres", "p2p"] if relay == "both" else [relay]
-    if pipeline:
-        active.append("packet-rules")
-    for plugin in active:
+    active_relays = ["postgres", "p2p"] if relay == "both" else [relay]
+
+    for plugin in active_relays:
         assert remote.run("a", f"{command} remove {plugin}", check=False).returncode != 0
         assert remote.run("a", f"{command} update {plugin} --path /opt/amitoki-lab/packages/{plugin}", check=False).returncode != 0
-    inactive = next((plugin for plugin in ("postgres", "p2p", "packet-rules") if plugin not in active), None)
-    if inactive is None:
-        # 両中継が動いている試験では、1台を停止してブロックだけ追加し直す。
-        remote.run("a", "sudo systemctl stop amitoki")
-        inactive = "packet-rules"
-    try:
-        remote.run("a", f"{command} remove {inactive}")
-        remote.run("a", f"{command} add --path /opt/amitoki-lab/packages/{inactive}")
-        if inactive == "postgres":
-            remote.run("a", f"{command} configure postgres --set max_connections=4")
-            remote.run("a", f"{command} validate postgres")
-            assert remote.run("a", f"{command} configure postgres --set max_connections=0", check=False).returncode != 0
-    finally:
-        remote.run("a", "sudo systemctl start amitoki")
+    if pipeline:
+        remote.run("a", f"{command} stage update packet-rules --path /opt/amitoki-lab/packages/packet-rules")
+        remote.run("a", "sudo -u amitoki /opt/amitoki-lab/amitoki reload --config /opt/amitoki-lab/amitoki.toml")
+    # Stageは実行中のコピーを維持するため、登録の削除・再追加でも停止しない。
+    removable = next(plugin for plugin in ("postgres", "p2p", "packet-rules") if plugin not in active_relays)
+    remote.run("a", f"{command} remove {removable}")
+    remote.run("a", f"{command} add --path /opt/amitoki-lab/packages/{removable}")
+    if removable == "postgres":
+        remote.run("a", f"{command} configure postgres --set max_connections=4")
+        remote.run("a", f"{command} validate postgres")
+        assert remote.run("a", f"{command} configure postgres --set max_connections=0", check=False).returncode != 0
     after = remote.run("a", "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0]
     assert before == after, "プラグインの追加削除で本体が変更されています"
     with (ROOT / "target/release/amitoki").open("rb") as stream:
@@ -119,8 +115,9 @@ def check_plugin_management(relay, pipeline):
     for node in NODES:
         assert remote.run(node, "sha256sum /opt/amitoki-lab/amitoki").stdout.split()[0] == expected
         assert remote.run(node, "command -v cargo", check=False).returncode != 0
-    return {"active_remove_rejected": True, "active_update_rejected": True,
-            "inactive_remove_and_add": True, "core_sha256_unchanged": before, "cargo_absent_on_guests": True}
+    return {"active_relay_remove_rejected": True, "active_relay_update_rejected": True,
+            "active_stage_update_and_reload": pipeline,
+            "remove_and_add": removable, "core_sha256_unchanged": before, "cargo_absent_on_guests": True}
 
 
 def run_tests(relay, pipeline=False):

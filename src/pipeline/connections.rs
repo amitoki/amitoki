@@ -1,4 +1,4 @@
-//! 設定を検証し、使用中ロックを持つプラグイン接続を作る。
+//! 設定を検証し、StageのスナップショットとRelayの接続を作る。
 use super::{Graph, PipelineConfig, RunningBlock};
 use crate::plugin_manager::{Package, PluginStore};
 use amitoki_plugin_sdk::block::{BlockContext, BlockDefinition};
@@ -11,8 +11,15 @@ pub struct Connections {
     pub relays: Vec<Arc<dyn Relay>>,
 }
 
-impl PipelineConfig {
-    pub fn check(&self, store: &PluginStore, context: &RelayContext) -> Result<Graph, Box<dyn std::error::Error>> {
+#[allow(async_fn_in_trait)]
+pub trait PipelineConnections {
+    fn check(&self, store: &PluginStore, context: &RelayContext) -> Result<Graph, Box<dyn std::error::Error>>;
+    async fn connect(&self, providers: (&PluginStore, &PluginRegistry), context: RelayContext) -> Result<Connections, Box<dyn std::error::Error>>;
+    async fn connect_blocks(&self, store: &PluginStore, context: &RelayContext) -> Result<Vec<RunningBlock>, Box<dyn std::error::Error>>;
+}
+
+impl PipelineConnections for PipelineConfig {
+    fn check(&self, store: &PluginStore, context: &RelayContext) -> Result<Graph, Box<dyn std::error::Error>> {
         let mut definitions: Vec<BlockDefinition> = Vec::new();
         for block in &self.blocks {
             store.resolved_options(&block.plugin, &block.options)?;
@@ -38,10 +45,11 @@ impl PipelineConfig {
         Ok(Graph::compile(self, &definitions)?)
     }
 
-    pub async fn connect(&self, providers: (&PluginStore, &PluginRegistry), context: RelayContext) -> Result<Connections, Box<dyn std::error::Error>> {
+    async fn connect(&self, providers: (&PluginStore, &PluginRegistry), context: RelayContext) -> Result<Connections, Box<dyn std::error::Error>> {
         let (store, registry) = providers;
-        let graph = self.check(store, &context)?;
+        self.check(store, &context)?;
         let blocks = self.connect_blocks(store, &context).await?;
+        let graph = Graph::compile(self, &blocks.iter().map(|block| block.definition.clone()).collect::<Vec<_>>())?;
         let mut relays = Vec::new();
         for instance in &self.relays {
             let context = RelayContext {
@@ -58,12 +66,11 @@ impl PipelineConfig {
         Ok(Connections { graph, blocks, relays })
     }
 
-    pub(crate) async fn connect_blocks(&self, store: &PluginStore, context: &RelayContext) -> Result<Vec<RunningBlock>, Box<dyn std::error::Error>> {
+    async fn connect_blocks(&self, store: &PluginStore, context: &RelayContext) -> Result<Vec<RunningBlock>, Box<dyn std::error::Error>> {
         let mut blocks = Vec::new();
         for instance in &self.blocks {
-            let definition = Package::load(&store.plugin_path(&instance.plugin)?)?.manifest.block.ok_or("ブロックの定義がありません")?;
-            let block = store
-                .connect_block(
+            let (block, manifest) = store
+                .connect_stage(
                     &instance.plugin,
                     BlockContext {
                         relay: context.clone(),
@@ -74,7 +81,7 @@ impl PipelineConfig {
                 .await?;
             blocks.push(RunningBlock {
                 block,
-                definition,
+                definition: manifest.block.ok_or("Stageの定義がありません")?,
                 on_error: instance.on_error,
             });
         }

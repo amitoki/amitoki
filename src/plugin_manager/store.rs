@@ -22,6 +22,7 @@ pub(crate) struct InstallRequest {
     pub name: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct PluginStore {
     pub directory: PathBuf,
 }
@@ -146,13 +147,41 @@ impl PluginStore {
         Ok(options)
     }
     pub async fn connect_block(&self, name: &str, context: BlockContext, options: Value) -> ManagerResult<Arc<dyn Block>> {
-        let lock = self.lock(name, false)?;
+        Ok(self.connect_stage(name, context, options).await?.0)
+    }
+    pub async fn connect_stage(&self, name: &str, context: BlockContext, options: Value) -> ManagerResult<(Arc<dyn Block>, amitoki_plugin_sdk::PluginManifest)> {
+        let store = self.clone();
+        let name = name.to_owned();
+        // バイナリのコピー・検証中も、本体のパケット処理を動かし続ける。
+        let snapshot = tokio::task::spawn_blocking(move || store.snapshot_stage(&name, &options).map_err(|error| error.to_string())).await??;
+        if snapshot.package.manifest.block.is_none() {
+            return Err("Stageの定義がありません".into());
+        }
+        let block = ProcessBlock::connect(
+            &snapshot.directory.path().join(&snapshot.package.binary),
+            &snapshot.package.manifest,
+            (context, snapshot.options),
+        )
+        .await?;
+        Ok((
+            Arc::new(InstalledBlock {
+                block,
+                _snapshot: snapshot.directory,
+            }),
+            snapshot.package.manifest,
+        ))
+    }
+    fn snapshot_stage(&self, name: &str, options: &Value) -> ManagerResult<StageSnapshot> {
+        // コピーが完了するまで更新を排他し、起動後はインストール先と寿命を分ける。
+        let _lock = self.lock(name, false)?;
         let path = self.plugin_path(name)?;
         let package = Package::load(&path)?;
-        package.verify(&path)?;
-        let options = self.resolved_options(name, &options)?;
-        let block = ProcessBlock::connect(&path.join(&package.binary), &package.manifest, (context, options)).await?;
-        Ok(Arc::new(InstalledBlock { block, _lock: lock }))
+        PluginKind::Block.check(&package)?;
+        let options = self.resolved_options(name, options)?;
+        let directory = tempfile::Builder::new().prefix(".stage-").tempdir_in(&self.directory)?;
+        std::fs::copy(path.join(&package.binary), directory.path().join(&package.binary))?;
+        package.verify(directory.path())?;
+        Ok(StageSnapshot { directory, package, options })
     }
     pub async fn connect(&self, name: &str, context: RelayContext, options: Value) -> ManagerResult<Arc<dyn Relay>> {
         let lock = self.lock(name, false)?;
@@ -194,12 +223,21 @@ fn exchange_directories(source: &Path, destination: &Path) -> std::io::Result<()
     }
 }
 
+struct StageSnapshot {
+    directory: tempfile::TempDir,
+    package: Package,
+    options: Value,
+}
+
 struct InstalledBlock {
     block: ProcessBlock,
-    _lock: File,
+    _snapshot: tempfile::TempDir,
 }
 #[async_trait]
 impl Block for InstalledBlock {
+    async fn generate(&self, request: &amitoki_plugin_sdk::packet::GenerateRequest) -> Result<Vec<Vec<u8>>, RelayError> {
+        self.block.generate(request).await
+    }
     async fn process(&self, packets: &[BlockPacket]) -> Result<Vec<BlockOutput>, RelayError> {
         self.block.process(packets).await
     }

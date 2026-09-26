@@ -29,7 +29,13 @@ struct Transport {
     ack_calls: AtomicUsize,
     failures: usize,
     ack_failures: usize,
+    ack_gate: Option<Arc<AcknowledgementGate>>,
     complete: Notify,
+}
+#[derive(Default)]
+struct AcknowledgementGate {
+    entered: Notify,
+    released: Notify,
 }
 #[async_trait]
 impl Relay for Transport {
@@ -45,7 +51,14 @@ impl Relay for Transport {
         Ok(self.incoming.lock().unwrap().iter().take(limit).cloned().collect())
     }
     async fn acknowledge(&self, receipts: &[Receipt]) -> Result<(), RelayError> {
-        if self.ack_calls.fetch_add(1, Ordering::SeqCst) < self.ack_failures {
+        let attempt = self.ack_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(gate) = &self.ack_gate {
+            if attempt == 0 {
+                gate.entered.notify_one();
+                gate.released.notified().await;
+            }
+        }
+        if attempt < self.ack_failures {
             return Err(RelayError::retryable("ACK障害"));
         }
         self.incoming.lock().unwrap().retain(|delivery| !receipts.contains(&delivery.receipt));
@@ -148,7 +161,7 @@ struct Harness {
     input: mpsc::Sender<Vec<u8>>,
     shutdown: CancellationToken,
 }
-fn harness(transports: [Arc<Transport>; 2], block: Arc<Classifier>, config: PipelineConfig) -> Harness {
+fn harness(transports: [Arc<Transport>; 2], block: Arc<dyn Block>, config: PipelineConfig) -> Harness {
     let definition = BlockDefinition {
         outputs: vec!["pass".into(), "drop".into()],
     };
@@ -367,5 +380,124 @@ async fn each_received_route_runs_its_analysis_while_nic_injection_is_deduplicat
     run.shutdown.cancel();
     task.await.unwrap().unwrap();
     assert_eq!(block.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(run.network.output.lock().unwrap().len(), 1);
+}
+
+struct WaitingStage {
+    entered: Notify,
+    released: Notify,
+}
+#[async_trait]
+impl Block for WaitingStage {
+    async fn process(&self, packets: &[BlockPacket]) -> Result<Vec<BlockOutput>, RelayError> {
+        self.entered.notify_one();
+        self.released.notified().await;
+        Ok(packets
+            .iter()
+            .map(|packet| BlockOutput {
+                ports: vec!["pass".into()],
+                annotations: packet.annotations.clone(),
+            })
+            .collect())
+    }
+}
+
+fn replacement(config: &PipelineConfig, block: Arc<dyn Block>) -> amitoki::pipeline::PreparedPipeline {
+    amitoki::pipeline::PreparedPipeline::new(
+        config,
+        vec![RunningBlock {
+            block,
+            definition: BlockDefinition {
+                outputs: vec!["pass".into(), "drop".into()],
+            },
+            on_error: ErrorPolicy::Stop,
+        }],
+    )
+    .unwrap()
+}
+
+#[tokio::test(start_paused = true)]
+async fn reload_keeps_an_inflight_packet_on_the_old_route_and_sends_new_packets_to_the_new_route() {
+    let first = Arc::new(Transport::default());
+    let second = Arc::new(Transport::default());
+    let old_stage = Arc::new(WaitingStage {
+        entered: Notify::new(),
+        released: Notify::new(),
+    });
+    let mut old_config = configuration();
+    old_config.routes[1].to = vec!["first".into()];
+    let run = harness([first.clone(), second.clone()], old_stage.clone(), old_config);
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    run.input.send(bytes(1)).await.unwrap();
+    old_stage.entered.notified().await;
+    let mut next_config = configuration();
+    next_config.routes[1].to = vec!["second".into()];
+    let next_stage = Arc::new(Classifier::new());
+    assert_eq!(run.engine.activate(replacement(&next_config, next_stage.clone())).unwrap(), 2);
+    run.input.send(bytes(2)).await.unwrap();
+    old_stage.released.notify_one();
+    first.complete.notified().await;
+    second.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(first.published.lock().unwrap().iter().map(|frame| frame.bytes[0]).collect::<Vec<_>>(), vec![1]);
+    assert_eq!(second.published.lock().unwrap().iter().map(|frame| frame.bytes[0]).collect::<Vec<_>>(), vec![2]);
+    assert_eq!(next_stage.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(Arc::strong_count(&old_stage), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reloading_preserves_completed_receipts_and_global_nic_deduplication() {
+    let first = Arc::new(Transport::default());
+    let second = Arc::new(Transport::default());
+    let packet = frame(4);
+    enqueue(&first, std::slice::from_ref(&packet));
+    let config = configuration();
+    let run = harness([first.clone(), second.clone()], Arc::new(Classifier::new()), config.clone());
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    first.complete.notified().await;
+    run.engine.activate(replacement(&config, Arc::new(Classifier::new()))).unwrap();
+    enqueue(&second, std::slice::from_ref(&packet));
+    second.complete.notified().await;
+    enqueue(&first, std::slice::from_ref(&packet));
+    first.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(run.network.output.lock().unwrap().len(), 1);
+    assert_eq!(first.acknowledgements.lock().unwrap().len(), 2);
+    assert_eq!(second.acknowledgements.lock().unwrap().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reload_retains_old_stages_until_ack_retry_finishes_without_repeating_analysis_or_injection() {
+    let gate = Arc::new(AcknowledgementGate::default());
+    let first = Arc::new(Transport {
+        ack_failures: 1,
+        ack_gate: Some(gate.clone()),
+        ..Default::default()
+    });
+    let second = Arc::new(Transport::default());
+    let packet = frame(3);
+    enqueue(&first, std::slice::from_ref(&packet));
+    let mut config = configuration();
+    config.routes[0].to = vec!["first".into()];
+    config.routes[1].to = vec!["inject".into()];
+    config.routes[3].to = vec!["classify".into()];
+    let old_stage = Arc::new(Classifier::new());
+    let next_stage = Arc::new(Classifier::new());
+    let run = harness([first.clone(), second], old_stage.clone(), config.clone());
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    gate.entered.notified().await;
+    run.engine.activate(replacement(&config, next_stage.clone())).unwrap();
+    assert!(Arc::strong_count(&old_stage) > 1, "ACK待ちの旧Stageが破棄された");
+    gate.released.notify_one();
+    first.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(Arc::strong_count(&old_stage), 1);
+    assert_eq!(old_stage.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(next_stage.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(first.ack_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(first.acknowledgements.lock().unwrap().len(), 1);
     assert_eq!(run.network.output.lock().unwrap().len(), 1);
 }

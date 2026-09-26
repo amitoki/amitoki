@@ -44,6 +44,7 @@ dependencies = [
 name = "amitoki"
 version = "0.1.0"
 dependencies = [
+ "amitoki-pipeline",
  "amitoki-plugin-sdk",
  "amitoki-relay",
  "amitoki-relay-memory",
@@ -80,9 +81,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "amitoki-plugin-sdk"
-version = "0.2.0"
+name = "amitoki-packet"
+version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "amitoki-pipeline"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "amitoki-plugin-sdk"
+version = "0.3.0"
+dependencies = [
+ "amitoki-packet",
+ "amitoki-pipeline",
  "amitoki-relay",
  "async-trait",
  "jsonschema",
@@ -116,6 +136,17 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "amitoki-stage-telemetry"
+version = "0.1.0"
+dependencies = [
+ "amitoki-plugin-sdk",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

@@ -41,7 +41,7 @@ cp amitoki.pipeline.example.toml amitoki.toml
 ./target/release/amitoki --config amitoki.toml --check-config
 ```
 
-`node_id`と`interface`を自分の環境に合わせ、PostgreSQLの追加・初期化・接続設定は[README](../readme.md)の手順を使う。このブランチの本体を最初にビルドした後は、ブロックだけをビルド・追加・更新できる。本体の再ビルドは不要。稼働中の設定変更・更新・削除は拒否し、再起動後に新しい構成を読み込む。ホットリロードは行わない。
+`node_id`と`interface`を自分の環境に合わせ、PostgreSQLの追加・初期化・接続設定は[README](../readme.md)の手順を使う。このブランチの本体を最初にビルドした後は、ブロックだけをビルド・追加・更新できる。本体の再ビルドは不要。Stageは稼働中に設定・配布物を更新でき、reloadで新世代へ切り替える。[Rust Pipeline/Stage・reload](rust-stages-reload.md)を参照。Relayの更新は停止が必要。
 
 同じプラグインを何個でも無制限に起動するのではなく、上限内で別の`id`として宣言する。各インスタンスは独立したプロセス・設定・状態を持つ。CLIで保存した設定に、そのインスタンスの`options`を項目単位で上書きする。
 
@@ -98,7 +98,7 @@ P2Pの証明書・ネットワーク設定は[プラグインの説明](https://
 
 ## 自作ブロックのAPI
 
-SDK 0.2.0の`amitoki_plugin_sdk::block`を使う。RustのAPIは拡張したが、中継のMessagePack通信仕様v1は維持し、PostgreSQL 0.1.2・P2P 0.1.1をそのまま利用する。
+SDK 0.3.0の`amitoki_plugin_sdk::stage`を使う。既存の`block` APIも利用できる。RustのAPIは拡張したが、中継のMessagePack通信仕様v1は維持し、PostgreSQL 0.1.2・P2P 0.1.1をそのまま利用する。
 
 1. `PluginManifest.block`に`BlockDefinition { outputs }`を指定し、設定を`config_schema`へ定義する。
 2. `BlockPlugin::connect(BlockContext, options)`でインスタンスを作る。コンテキストには本体のnode/channelとインスタンスIDが入る。
@@ -121,6 +121,6 @@ scripts/vm-lab up --relay both --pipeline
 scripts/vm-lab test --relay both --pipeline
 ```
 
-3台にPostgreSQL・P2Pと3個のpacket-rulesインスタンスを配備する。ICMP/TCP/UDP、停止後の再配送、使用中の更新・削除拒否、本体バイナリ不変を調べる。実験用EtherTypeの通過・拒否と、両経路からの同じIDがNICへ重複注入されないこと、各子プロセスのcapability消去も確認する。
+3台にPostgreSQL・P2Pと3個のpacket-rulesインスタンスを配備する。ICMP/TCP/UDP、停止後の再配送、使用中Relayの更新・削除拒否とStageの更新・reload、本体バイナリ不変を調べる。実験用EtherTypeの通過・拒否と、両経路からの同じIDがNICへ重複注入されないこと、各子プロセスのcapability消去も確認する。
 
 `--relay postgres --pipeline`と`--relay p2p --pipeline`で単独中継も試せる。従来の構成は`--relay postgres --no-pipeline`または`--relay p2p --no-pipeline`。PCAPによる単体テスト・経路トレースは[開発・デバッグ手順](plugin-development.md)を参照する。GUI・Webエディタ、パケット改変、経路ごとの永続チェックポイント、最大帯域測定は未実装。

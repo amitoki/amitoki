@@ -13,7 +13,7 @@ fn local_paths_and_installed_names_manage_the_same_copy_without_changing_the_sou
     lab.success(&["plugin", "block", "configure", "~/bundle", "--set", "mode=drop"]);
     lab.success(&["plugin", "block", "validate", lab.package.to_str().unwrap()]);
     lab.success(&["plugin", "block", "update", "block-fixture"]);
-    assert!(lab.success(&["plugin", "block", "list"]).contains("block-fixture\tblock"));
+    assert!(lab.success(&["plugin", "block", "list"]).contains("block-fixture\tstage"));
     assert!(!lab.success(&["plugin", "relay", "list"]).contains("block-fixture"));
     lab.success(&["plugin", "block", "del", "./bundle"]);
     assert!(lab.package.join("plugin.json").exists());

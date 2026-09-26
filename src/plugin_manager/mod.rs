@@ -12,3 +12,5 @@ pub use kind::PluginKind;
 pub use package::Package;
 pub use store::PluginStore;
 pub type ManagerResult<T> = Result<T, Box<dyn std::error::Error>>;
+
+pub use source::expand_path;
