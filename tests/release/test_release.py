@@ -97,11 +97,17 @@ class PublishingTests(unittest.TestCase):
     def test_only_a_complete_matching_upload_is_published(self):
         names = [name for target in metadata.TARGETS for name in metadata.filenames(metadata.version(), target)] + ["SHA256SUMS"]
         uploaded = {"assets": [{"name": name, "digest": "sha256:hash"} for name in names]}
+
+        def read_draft(*command):
+            if command[:2] == ("gh", "api"):
+                raise subprocess.CalledProcessError(1, command, stderr="Not Found (HTTP 404)")
+            return json.dumps(uploaded)
+
         with tempfile.TemporaryDirectory() as temporary, \
                 patch.object(publish, "release_preflight", return_value=("commit", Path("notes"))), \
                 patch.object(publish, "verify_target", return_value=""), \
                 patch.object(publish, "digest", return_value="hash"), \
-                patch.object(publish, "output", return_value=json.dumps(uploaded)), \
+                patch.object(publish, "output", side_effect=read_draft), \
                 patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":true}')) as run:
             publish.publish(Path(temporary), f"v{metadata.version()}", "example/repository")
             self.assertIn("--draft=false", run.call_args.args[0])

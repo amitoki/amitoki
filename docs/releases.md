@@ -97,4 +97,13 @@ git push origin v0.1.0
 
 タグのCIは再度ビルド・テストし、draftのReleaseへ4配布物と`SHA256SUMS`をアップロードする。GitHub上のファイル名・SHA256が全部一致したら公開する。途中で失敗したdraftは、原因を修正したうえで同じワークフローを再実行できる。公開済み版は上書きしない。コード修正が必要なら新しい版を作る。
 
-通常のpushや手動実行ではReleaseを公開しない。ワークフローがmainに入った後は、ActionsのRun workflowからタグ作成前の配布物を作れる。
+公開スクリプトに不具合があった場合は、mainで修正して`Resume verified release`を実行する。既存タグのCIで静的チェック・ネットワーク試験・両CPUのテストと配布物生成が成功していることを確認し、そのArtifactを使って公開だけを再開する。タグと配布物は変更しない。Artifactの保存期間は14日。
+
+```bash
+gh workflow run publish-release.yml --repo amitoki/amitoki --ref main \
+  -f tag=v0.1.0 -f run_id=対象のタグCIのrun_ID
+```
+
+再開時はタグのソースへmainの検証・公開スクリプトを適用する。本体版・リリースノートはタグから読み、配布物のcommitがタグと一致することと、タグがmainに含まれることを再検証する。公開済みReleaseは再開でも上書きしない。
+
+`CI and release`の通常ブランチへのpushや手動実行ではReleaseを公開しない。ActionsのRun workflowからタグ作成前の配布物を作れる。

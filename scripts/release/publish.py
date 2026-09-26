@@ -40,7 +40,8 @@ def publish(directory, tag, repository):
         subprocess.run([*base, "create", tag, "--repo", repository, "--verify-tag", "--draft", "--title", tag, "--notes-file", str(notes)], check=True)
     subprocess.run([*base, "upload", tag, "--repo", repository, "--clobber", *map(str, assets)], check=True)
     # GitHubが返すdigestも照合してから公開し、部分的なアップロードを公開しない。
-    release = json.loads(output("gh", "api", f"repos/{repository}/releases/tags/{tag}"))
+    # タグ指定のREST APIはdraftを返さない。CLIはdraftも解決して取得する。
+    release = json.loads(output(*base, "view", tag, "--repo", repository, "--json", "assets"))
     expected = {path.name: f"sha256:{digest(path)}" for path in assets}
     uploaded = {asset["name"]: asset["digest"] for asset in release["assets"]}
     if uploaded != expected:
