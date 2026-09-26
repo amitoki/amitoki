@@ -2,11 +2,11 @@
 
 本体はLinuxのx86_64・ARM64向けに、実行ファイルを含むtar.gzとdebを配布する。CIはUbuntu 22.04でネイティブビルドし、同じCPU上で両形式をテストする。glibc環境向けで、Alpine Linuxのmusl向けではない。
 
-この仕組みは開発ブランチで検証中。本体のv0.4.0はまだ公開していない。公開前は[GitHub Actions](https://github.com/amitoki/amitoki/actions/workflows/rust.yml)の成功した実行から`release-<target>`というArtifactをダウンロードして試せる。ArtifactのZIPを展開するとtar.gz・deb・CPU別のSHA256SUMSが入っている。
+版タグを付ける前の開発版も、[GitHub Actions](https://github.com/amitoki/amitoki/actions/workflows/rust.yml)の成功した実行から`release-<target>`というArtifactをダウンロードして試せる。ArtifactのZIPを展開するとtar.gz・deb・CPU別のSHA256SUMSが入っている。
 
 ## 公開版をインストールする
 
-[GitHub Releases](https://github.com/amitoki/amitoki/releases)から、使用するCPUに合うファイルと`SHA256SUMS`を取得する。以下はv0.4.0を公開した後に使う例。GitHub CLIを入れたUbuntu/Debianのターミナルで実行する。
+[GitHub Releases](https://github.com/amitoki/amitoki/releases)から、使用するCPUに合うファイルと`SHA256SUMS`を取得する。以下はv0.4.0の公開後に使うインストール例。GitHub CLIを入れたUbuntu/Debianのターミナルで実行する。
 
 ```bash
 sudo apt-get update
