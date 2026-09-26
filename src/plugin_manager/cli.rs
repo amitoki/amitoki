@@ -68,6 +68,8 @@ enum Operation {
     Remove { target: String },
     /// PCAPを入力してブロック単体を検証
     Test(crate::debug::BlockTestArguments),
+    /// ソース変更後にビルドし、PCAP単体テストを繰り返す
+    Watch(crate::debug::watch::WatchArguments),
 }
 
 pub async fn run_cli(arguments: &[String]) -> ManagerResult<()> {
@@ -125,6 +127,12 @@ pub async fn run_cli(arguments: &[String]) -> ManagerResult<()> {
             let package = PluginTarget::parse(&target)?.installed(&store, kind)?;
             store.remove(&package.manifest.name)?;
             println!("{}を削除しました（設定は保持）", package.manifest.name);
+        },
+        Operation::Watch(arguments) => {
+            if kind != Some(PluginKind::Block) {
+                return Err("watchはplugin block watchで実行してください".into());
+            }
+            crate::debug::watch::watch(arguments).await?;
         },
         Operation::Test(arguments) => {
             if kind != Some(PluginKind::Block) {
