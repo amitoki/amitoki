@@ -3,7 +3,10 @@ use crate::{
     pipeline::{PipelineConnections, PipelineEngine, PreparedPipeline},
     plugin_manager::PluginStore,
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 pub struct ReloadSource {
     pub path: PathBuf,
@@ -16,16 +19,34 @@ pub struct Reloader {
     baseline: AppConfig,
     store: PluginStore,
     engine: Option<Arc<PipelineEngine>>,
+    runtime: Option<crate::runtime::Runtime>,
+    topology: RwLock<crate::observation::Topology>,
 }
 
 impl Reloader {
     pub fn new(source: ReloadSource, engine: Option<Arc<PipelineEngine>>) -> Self {
         Self {
+            topology: RwLock::new(crate::observation::Topology::new(&source.baseline)),
+            runtime: engine.clone().map(crate::runtime::Runtime::Pipeline),
             path: source.path,
             baseline: source.baseline,
             store: source.store,
             engine,
         }
+    }
+
+    pub fn with_runtime(mut self, runtime: crate::runtime::Runtime) -> Self {
+        self.runtime = Some(runtime);
+        self
+    }
+
+    pub fn status(&self) -> Result<crate::observation::Status, String> {
+        let topology = self.topology.read().map_err(|_| "観測情報を取得できません")?;
+        Ok(crate::observation::Status::new(
+            self.runtime.as_ref().ok_or("本体は起動していません")?,
+            topology.clone(),
+            self.baseline.engine.relay_queue_capacity,
+        ))
     }
 
     pub async fn reload(&self) -> Result<u64, String> {
@@ -42,11 +63,14 @@ impl Reloader {
                 .await
                 .map_err(|error| error.to_string())??;
             let blocks = pipeline.connect_blocks(&self.store, &next.context()).await.map_err(|error| error.to_string())?;
-            PreparedPipeline::new(pipeline, blocks)
+            Ok::<_, String>((PreparedPipeline::new(pipeline, blocks)?, pipeline.clone()))
         };
-        let prepared =
+        let (prepared, pipeline) =
             tokio::time::timeout(self.baseline.engine.reload_timeout(), prepare).await.map_err(|_| "新しいStageの初期化がタイムアウトしました。旧Pipelineを継続します")??;
-        engine.activate(prepared)
+        let mut topology = self.topology.write().map_err(|_| "観測情報を更新できません")?;
+        let generation = engine.activate(prepared)?;
+        topology.set_pipeline(&pipeline);
+        Ok(generation)
     }
 
     fn check_unchanged(&self, next: &AppConfig) -> Result<(), String> {

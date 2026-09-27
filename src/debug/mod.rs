@@ -7,7 +7,9 @@ mod pcap;
 mod replay;
 mod report;
 mod runner;
+mod snapshot;
 mod stage_session;
+pub use report::PacketReport;
 pub mod watch;
 
 use crate::plugin_manager::{source::expand_path, ManagerResult, PluginStore};
@@ -67,6 +69,12 @@ enum Operation {
         source: String,
         #[arg(long)]
         json: bool,
+        /// Stageごとの入出力と先頭256バイトを含める
+        #[arg(long)]
+        inspect: bool,
+        /// 再生するパケット数の上限
+        #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
+        limit: Option<u64>,
     },
     /// --jsonの結果を比較（処理時間は比較しない、差分ありは終了コード1）
     Compare {
@@ -84,7 +92,14 @@ pub async fn run_cli(arguments: &[String]) -> ManagerResult<()> {
         None => PluginStore::from_environment()?,
     };
     match arguments.command {
-        Operation::Replay { config, pcap, source, json } => {
+        Operation::Replay {
+            config,
+            pcap,
+            source,
+            json,
+            inspect,
+            limit,
+        } => {
             replay::replay(
                 &store,
                 &expand_path(&config)?,
@@ -92,6 +107,8 @@ pub async fn run_cli(arguments: &[String]) -> ManagerResult<()> {
                     pcap: expand_path(&pcap)?,
                     source,
                     json,
+                    inspect,
+                    limit,
                 },
             )
             .await

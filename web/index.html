@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>amitoki</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div id="amitoki-design">
+      <header class="am-top">
+        <div class="am-brand">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8v5M5 16v-3h14v3" />
+            <rect x="9" y="2" width="6" height="6" rx="1" />
+            <rect x="2" y="16" width="6" height="6" rx="1" />
+            <rect x="16" y="16" width="6" height="6" rx="1" /></svg
+          >amitoki
+        </div>
+        <div class="am-local">
+          <span class="am-dot" id="connection-dot"></span
+          ><span id="node-name">—</span><span class="am-caption">LOCAL</span>
+        </div>
+        <span class="am-top-note" id="connection-state"></span>
+      </header>
+      <div class="am-layout">
+        <aside class="am-sidebar">
+          <nav class="am-nav" aria-label="画面">
+            <button type="button" data-view="pipeline" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="2" y="2" width="6" height="6" rx="1" />
+                <rect x="16" y="16" width="6" height="6" rx="1" />
+                <path d="M5 8v8a3 3 0 0 0 3 3h8M16 5h3v6M12 5h1" /></svg
+              ><span data-label="pipeline"></span>
+            </button>
+            <button type="button" data-view="packets" aria-pressed="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5M7 12h10" /></svg
+              ><span data-label="packets"></span>
+            </button>
+            <button type="button" data-view="operations" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12h5l3-9 4 18 3-9h5" /></svg
+              ><span data-label="operations"></span>
+            </button>
+          </nav>
+          <div class="am-branch">
+            <strong id="channel-name">—</strong
+            ><span id="pipeline-count"></span>
+          </div>
+        </aside>
+        <main class="am-main">
+          <div id="message" role="alert" hidden></div>
+          <div id="am-view" aria-live="polite"></div>
+        </main>
+      </div>
+    </div>
+    <noscript>JavaScriptを有効にしてください。</noscript>
+  </body>
+</html>

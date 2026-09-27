@@ -116,6 +116,7 @@ impl Planner<'_> {
                     packet: input.index,
                     block: index,
                     elapsed_us,
+                    input: input.packet.clone(),
                     output: response.as_ref().map(|outputs| outputs[offset].clone()).map_err(ToString::to_string),
                 });
             }

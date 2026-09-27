@@ -6,6 +6,7 @@ use crate::{
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
+#[derive(Clone)]
 pub enum Runtime {
     Relay(Arc<Engine>),
     Pipeline(Arc<PipelineEngine>),

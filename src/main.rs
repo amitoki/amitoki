@@ -32,6 +32,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if arguments.first().map(String::as_str) == Some("debug") {
         return amitoki::debug::run_cli(&arguments[1..]).await;
     }
+    if arguments.first().map(String::as_str) == Some("web") {
+        return amitoki::web::run_cli(&arguments[1..]).await;
+    }
     let registry = builtin_plugins()?;
     let store = PluginStore::from_environment()?;
     if arguments == ["--list-plugins"] {
@@ -42,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if arguments == ["--help"] || arguments == ["-h"] {
-        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki --version\namitoki plugin --help\namitoki debug --help\namitoki reload --help");
+        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki --version\namitoki plugin --help\namitoki debug --help\namitoki reload --help\namitoki web --help");
         return Ok(());
     }
     let mut path = PathBuf::from("amitoki.toml");
@@ -105,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Runtime::Pipeline(engine) => Some(engine.clone()),
         Runtime::Relay(_) => None,
     };
-    let reloader = amitoki::control::Reloader::new(amitoki::control::ReloadSource { path, baseline, store }, pipeline);
+    let reloader = amitoki::control::Reloader::new(amitoki::control::ReloadSource { path, baseline, store }, pipeline).with_runtime(engine.clone());
     let controlling = control_server.run(reloader, shutdown.clone());
     tokio::pin!(controlling);
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
