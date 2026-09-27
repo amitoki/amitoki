@@ -18,25 +18,13 @@ const MAX_CAPTURE_NAME_BYTES: usize = 255;
 
 pub(super) fn router(state: Arc<WebState>) -> Router {
     Router::new()
-        .route("/", get(|| async { asset("text/html; charset=utf-8", include_str!("../../web/index.html")) }))
         .route("/favicon.ico", get(|| async { StatusCode::NO_CONTENT }))
-        .route("/app.css", get(|| async { asset("text/css; charset=utf-8", include_str!("../../web/app.css")) }))
-        .route("/app.js", get(|| async { asset("text/javascript; charset=utf-8", include_str!("../../web/app.js")) }))
-        .route("/views.js", get(|| async { asset("text/javascript; charset=utf-8", include_str!("../../web/views.js")) }))
-        .route("/labels.js", get(|| async { asset("text/javascript; charset=utf-8", include_str!("../../web/labels.js")) }))
-        .route(
-            "/diagram.js",
-            get(|| async { asset("text/javascript; charset=utf-8", include_str!("../../web/diagram.js")) }),
-        )
         .route("/api/topology", get(topology))
         .route("/api/status", get(status))
         .route("/api/capture", get(capture).merge(post(upload)))
+        .fallback(get(super::assets::serve))
         .layer(middleware::from_fn_with_state(state.clone(), protect))
         .with_state(state)
-}
-
-fn asset(content_type: &'static str, body: &'static str) -> Response {
-    ([(header::CONTENT_TYPE, content_type)], body).into_response()
 }
 
 async fn protect(State(state): State<Arc<WebState>>, request: Request, next: Next) -> Response {

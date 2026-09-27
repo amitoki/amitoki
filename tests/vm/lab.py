@@ -15,6 +15,7 @@ from settings import NODES, ROOT, SSH_PORTS, STATE
 
 
 def up(relay, pipeline, nodes=NODES):
+    subprocess.run(["bash", "scripts/build-web.sh"], cwd=ROOT, check=True)
     subprocess.run(["cargo", "build", "--release", "--bin", "amitoki", "--locked"], cwd=ROOT, check=True)
     for plugin in ("postgres", "p2p"):
         subprocess.run(["cargo", "build", "--release", "--locked", "--manifest-path", f"plugins/{plugin}/Cargo.toml"], cwd=ROOT, check=True)

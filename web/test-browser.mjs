@@ -3,12 +3,21 @@ import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
-import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
+import {
+  cp,
+  readFile,
+  symlink,
+  mkdtemp,
+  writeFile,
+  rm,
+  mkdir,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
+const development = process.argv.includes("--dev");
 const binary = resolve(
   root,
   process.env.AMITOKI_BINARY ?? "target/release/amitoki",
@@ -108,6 +117,8 @@ const child = spawn(
   { stdio: ["ignore", "pipe", "inherit"] },
 );
 let browser;
+let devServer;
+const frontend = join(directory, "web");
 try {
   const lines = createInterface({ input: child.stdout });
   const [url] = await Promise.race([
@@ -116,6 +127,35 @@ try {
       throw new Error("Webの起動に失敗");
     }),
   ]);
+  let frontendUrl = url;
+  if (development) {
+    process.env.AMITOKI_WEB_BACKEND = new URL(url).origin;
+    await mkdir(frontend);
+    // HMR検証は一時コピーだけを編集し、作業中のソースへ書き込まない。
+    for (const name of [
+      "src",
+      "public",
+      "index.html",
+      "vite.config.ts",
+      "package.json",
+    ]) {
+      await cp(join(root, "web", name), join(frontend, name), {
+        recursive: true,
+      });
+    }
+    await symlink(
+      join(root, "web", "node_modules"),
+      join(frontend, "node_modules"),
+      "dir",
+    );
+    const { createServer } = await import("vite");
+    devServer = await createServer({
+      root: frontend,
+      server: { port: 0 },
+    });
+    await devServer.listen();
+    frontendUrl = `${devServer.resolvedUrls.local[0]}${new URL(url).hash}`;
+  }
   browser = await chromium.launch({
     headless: true,
     ...(process.env.AMITOKI_CHROMIUM
@@ -131,7 +171,9 @@ try {
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
-  await page.goto(url);
+  await page.goto(frontendUrl);
+  if (development)
+    assert.equal(await page.locator('script[src="/@vite/client"]').count(), 1);
   await page.locator("#pcap").waitFor();
   const uploaded = page.waitForResponse(
     (response) =>
@@ -146,7 +188,7 @@ try {
   const token = await page.evaluate(() =>
     sessionStorage.getItem("amitoki-token"),
   );
-  const origin = new URL(url).origin;
+  const origin = new URL(frontendUrl).origin;
   const loaded = await page.request.get(`${origin}/api/capture`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -160,6 +202,37 @@ try {
   await page.locator('[data-step="2"]').click();
   assert.equal(await page.locator(".am-diff-panel").count(), 2);
   assert.ok((await page.locator("mark").count()) > 0);
+  if (development) {
+    const component = join(frontend, "src", "packets", "SnapshotPanel.tsx");
+    const original = await readFile(component, "utf8");
+    await page.evaluate(() => {
+      window.amitokiHmrVerified = true;
+    });
+    await writeFile(
+      component,
+      original.replaceAll(
+        'className="am-diff-panel"',
+        'data-hmr-verified="true" className="am-diff-panel"',
+      ),
+    );
+    await page.locator('[data-hmr-verified="true"]').first().waitFor();
+    assert.equal(await page.evaluate(() => window.amitokiHmrVerified), true);
+    assert.equal(
+      await page.locator('[data-step="2"]').getAttribute("aria-pressed"),
+      "true",
+    );
+    await writeFile(component, original);
+    await page.waitForFunction(
+      () => !document.querySelector("[data-hmr-verified]"),
+    );
+    const foreign = await page.request.get(`${origin}/api/topology`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: "https://attacker.example",
+      },
+    });
+    assert.equal(foreign.status(), 403);
+  }
   await page.locator('[data-packet="2"]').click();
   await page.locator('[data-step="1"]').click();
   assert.ok(
@@ -277,7 +350,14 @@ try {
   await writeFile(
     join(artifacts, "verification.json"),
     JSON.stringify(
-      { status: "passed", layouts, errors, packets: dataset.packets.length },
+      {
+        status: "passed",
+        mode: development ? "development" : "production",
+        hmr: development,
+        layouts,
+        errors,
+        packets: dataset.packets.length,
+      },
       null,
       2,
     ),
@@ -287,6 +367,7 @@ try {
   );
 } finally {
   await browser?.close();
+  await devServer?.close();
   if (child.exitCode === null) {
     const exited = once(child, "exit");
     child.kill("SIGTERM");

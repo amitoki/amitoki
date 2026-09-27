@@ -18,7 +18,7 @@ Linux向け。本体の実行ファイル・debの入手方法とCIは[インス
 
 ## ビルドする
 
-Ubuntu/Debianで必要なツールを入れる。Rustの導入方法は[rustup公式](https://rust-lang.github.io/rustup/installation/other.html)に従う。
+Ubuntu/Debianで必要なツールを入れる。Rustの導入方法は[rustup公式](https://rust-lang.github.io/rustup/installation/other.html)に従う。ソースからのビルドにはNode.js 24以降も必要。[Web開発の手順](docs/web-ui.md#開発環境)で準備する。配布バイナリの実行にNode.jsは不要。
 
 ```bash
 sudo apt-get update
@@ -28,6 +28,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profil
 rustup component add rustfmt clippy
 git clone https://github.com/amitoki/amitoki.git
 cd amitoki
+bash scripts/build-web.sh
 cargo build --release --bin amitoki --locked
 ```
 

@@ -73,6 +73,20 @@ async fn local_api_requires_session_token_and_rejects_foreign_hosts_and_origins(
     let page = server.get("/").send().await.unwrap();
     assert!(page.headers()["content-security-policy"].to_str().unwrap().contains("frame-ancestors 'none'"));
     assert_eq!(page.headers()["cache-control"], "no-store");
+    let html = page.text().await.unwrap();
+    assert!(!html.contains("/src/main.tsx"));
+    let assets: Vec<_> = html.split('"').filter(|part| part.starts_with("/assets/")).collect();
+    assert!(assets.iter().any(|path| path.ends_with(".js")));
+    assert!(assets.iter().any(|path| path.ends_with(".css")));
+    for path in assets {
+        let response = server.get(path).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let content_type = if path.ends_with(".js") { "text/javascript" } else { "text/css" };
+        assert!(response.headers()["content-type"].to_str().unwrap().starts_with(content_type));
+        assert!(!response.bytes().await.unwrap().is_empty());
+    }
+    assert_eq!(server.get("/src/main.tsx").send().await.unwrap().status(), StatusCode::NOT_FOUND);
+    assert_eq!(server.get("/assets/missing.js").send().await.unwrap().status(), StatusCode::NOT_FOUND);
     let topology: Value = server.get("/api/topology").send().await.unwrap().json().await.unwrap();
     assert_eq!(topology["stages"][0]["id"], "first");
     assert!(topology["stages"][0].get("options").is_none());

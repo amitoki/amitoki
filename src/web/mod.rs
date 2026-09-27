@@ -1,4 +1,5 @@
 //! ローカルの解析・監視UI。転送本体とは別プロセスで動く。
+mod assets;
 mod replay;
 mod server;
 use crate::{

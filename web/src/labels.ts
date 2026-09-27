@@ -1,4 +1,6 @@
 export const labels = {
+  navigation: "画面",
+  hex: "Hex",
   pipeline: "パイプライン",
   packets: "パケット解析",
   operations: "稼働状況",
