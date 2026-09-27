@@ -105,6 +105,11 @@ jobs:
           npx playwright install --with-deps chromium
           npm test
           AMITOKI_WEB_ARTIFACTS=artifacts/web/dev npm run test:dev
+      - name: Verify development launcher lifecycle
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        env:
+          AMITOKI_DEV_BINARY: target/release/amitoki
+        run: python3 -m unittest discover -s tests/dev -v
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && matrix.target == 'x86_64-unknown-linux-gnu'
         with:

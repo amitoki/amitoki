@@ -10,6 +10,8 @@ v0.2.0では[Rust Pipeline/Stage・生成テスト・reload](docs/rust-stages-re
 
 開発版は`amitoki web --config ./amitoki.toml`で[Web UI](docs/web-ui.md)を開ける。PCAP解析、Stageごとの入出力、パイプライン図、本体・Relayの稼働状況をローカルのブラウザに表示する。
 
+Web開発では`uv run scripts/dev.py`でビルド・API・Viteをまとめて起動できる。[必要なツールと起動オプション](docs/web-ui.md#uvでまとめて起動する)を参照する。
+
 開発版では中継ごとの送信キュー・ACK待ちを分離し、停止した経路だけを制限する。[パケット加工Stage](plugins/telemetry-rewrite/README.md)と[耐久・障害試験](docs/endurance.md)も利用できる。
 
 Linux向け。本体の実行ファイル・debの入手方法とCIは[インストールとリリース](docs/releases.md)、ソースからのビルドは以下を参照する。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。

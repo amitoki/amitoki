@@ -83,7 +83,34 @@ cargo build --release --bin amitoki --locked
 
 `scripts/build-web.sh`は`npm ci`、型検査、Viteビルドを行う。`build.rs`が`web/dist`のハッシュ付きアセットを埋め込む。`web/dist`と`node_modules`はGit管理しない。画面を変更した場合は、Rustのビルド前にWebも再ビルドする。CIではWebを一度ビルドし、同じ成果物を両CPUへ埋め込む。Dockerと`setup.sh`、VM試験のビルドにも組み込んでいる。
 
-### Viteで画面を編集する
+### uvでまとめて起動する
+
+RustとNode.jsを準備したら、リポジトリのルートで実行する。uvが未導入の場合は[公式インストーラ](https://docs.astral.sh/uv/getting-started/installation/)で導入する。
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+uv run scripts/dev.py
+```
+
+`npm ci`・Webビルド・本体のdebugビルド・サンプルStageの準備を行い、APIとViteを起動する。最後に表示される`http://127.0.0.1:5173/#...`を開く。URLには認証トークンが含まれており、手で移す必要はない。Ctrl+Cで両方を停止する。片方の異常終了や起動失敗でも、起動したもう片方を停止する。
+
+設定を省略すると`amitoki.debug.example.toml`を使い、packet-rulesを一時ディレクトリに登録する。利用者のプラグイン保存先は変更しない。NICとRelayの転送は開始しない。RustやNode.jsはuvとは別に必要だが、Python 3.12以降は[uvが選択・取得する](https://docs.astral.sh/uv/guides/scripts/#declaring-script-dependencies)。追加のPythonパッケージは不要。
+
+```bash
+# 自分の設定とPCAPを使う
+uv run scripts/dev.py --config ./amitoki.toml --pcap ./input.pcap
+
+# ビルド済みなら準備を省略して起動する
+uv run scripts/dev.py --no-build
+
+# ポートを指定する。0なら空いているポートを自動割り当て
+uv run scripts/dev.py --port 5174 --api-port 8711
+```
+
+`--config`指定時のプラグイン保存先は本体と同じ環境変数・既定値を使う。`--directory`で上書きできる。パスはコマンドを実行したディレクトリが基準で、絶対パスと`~`にも対応する。`--binary ./target/release/amitoki`で既存の実行ファイルを選べる。依存関係やRust側を変更したら、`--no-build`を外して再起動する。
+
+### APIとViteを個別に起動する
 
 1つ目のターミナルでAPIを起動する。
 

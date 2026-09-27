@@ -7,8 +7,8 @@
     "check": "tsc --noEmit",
     "build": "npm run check && vite build",
     "test": "node test-browser.mjs",
-    "format": "prettier --write src vite.config.ts tsconfig.json index.html test-browser.mjs",
-    "format:check": "prettier --check src vite.config.ts tsconfig.json index.html test-browser.mjs",
+    "format": "prettier --write src vite.config.ts tsconfig.json index.html test-browser.mjs dev-server.mjs",
+    "format:check": "prettier --check src vite.config.ts tsconfig.json index.html test-browser.mjs dev-server.mjs",
     "test:dev": "node test-browser.mjs --dev"
   },
   "devDependencies": {
