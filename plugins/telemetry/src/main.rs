@@ -54,6 +54,7 @@ fn manifest() -> PluginManifest {
         protocol_version: PROTOCOL_VERSION,
         description: "共有Rust codecを使う解析・温度フィルタ・ログと試験パケット生成".into(),
         block: Some(StageDefinition {
+            rewrite: false,
             outputs: vec!["pass".into(), "drop".into()],
         }),
         packets: vec![TelemetryGenerator.definition()],
@@ -91,6 +92,7 @@ impl Stage for TelemetryStage {
                     Ok(message) => message,
                     Err(_) => {
                         return Ok(StageOutput {
+                            bytes: None,
                             ports: vec!["drop".into()],
                             annotations: packet.annotations.clone(),
                         })
@@ -104,6 +106,7 @@ impl Stage for TelemetryStage {
                 }
                 let reject = matches!(self.options.operation, Operation::Filter) && message.temperature > self.options.threshold;
                 Ok(StageOutput {
+                    bytes: None,
                     ports: vec![if reject { "drop" } else { "pass" }.into()],
                     annotations,
                 })

@@ -89,6 +89,7 @@ impl ReplayPlan {
         };
         let metrics = PipelineMetrics::default();
         let planner = Planner {
+            firewall: &self.firewall,
             graph: &self.graph,
             blocks: &self.blocks,
             metrics: &metrics,
@@ -122,9 +123,17 @@ impl ReplayPlan {
             annotations: serde_json::json!({}),
             elapsed_us: event.elapsed_us,
             error: None,
+            rewrite: None,
         };
         match event.output {
             Ok(output) => {
+                if let Some(bytes) = &output.bytes {
+                    use sha2::{Digest, Sha256};
+                    step.rewrite = Some(super::report::RewriteReport {
+                        length: bytes.len(),
+                        sha256: format!("{:x}", Sha256::digest(bytes)),
+                    });
+                }
                 for port in output.ports {
                     let to = self.graph.outputs[event.block][&port].iter().map(|destination| self.destination(*destination)).collect();
                     step.ports.push(PortRoute { port, to });

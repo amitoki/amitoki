@@ -57,6 +57,8 @@ jobs:
       - run: cargo build --release --bin amitoki --locked
       - run: bash scripts/build-packet-rules.sh
       - run: bash scripts/build-telemetry.sh
+      - run: bash scripts/build-telemetry-rewrite.sh
+      - run: python3 scripts/check-telemetry-rewrite.py
       - name: Exercise Rust Pipeline and generated packets
         run: |
           cargo run --locked --example pipeline -- /tmp/amitoki-pipeline.json

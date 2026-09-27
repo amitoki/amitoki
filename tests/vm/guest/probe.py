@@ -9,6 +9,7 @@ import raw_probe
 import struct
 import sys
 import threading
+import time
 
 # MTU1500でフラグメントしない最大UDPデータ長。短い機能試験として64件を照合する。
 UDP_BYTES = 1472
@@ -60,6 +61,7 @@ def serve():
 
 def tcp_transfer(address):
     payload = bytes(range(256)) * (TCP_BYTES // 256)
+    started = time.monotonic()
     with socket.create_connection((address, TCP_PORT), timeout=TIMEOUT_SECONDS) as connection:
         connection.sendall(payload)
         connection.shutdown(socket.SHUT_WR)
@@ -68,6 +70,8 @@ def tcp_transfer(address):
             response += chunk
     report = json.loads(response)
     assert report == {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}, report
+    report["elapsed_seconds"] = time.monotonic() - started
+    report["payload_mbps"] = len(payload) * 8 / report["elapsed_seconds"] / 1_000_000
     return report
 
 

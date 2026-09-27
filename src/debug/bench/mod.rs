@@ -114,6 +114,7 @@ async fn process(plan: &ReplayPlan, packets: Vec<Vec<u8>>, offset: u64) -> Manag
     }
     let metrics = PipelineMetrics::default();
     let planner = Planner {
+        firewall: &plan.firewall,
         graph: &plan.graph,
         blocks: &plan.blocks,
         metrics: &metrics,

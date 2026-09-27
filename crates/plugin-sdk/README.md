@@ -12,3 +12,5 @@
 
 
 Stage API・共有Rustパケット定義・Pipeline生成は[開発手順](../../docs/rust-stages-reload.md)を参照してください。Stageの配布メタデータはRustのmanifestから生成します。
+
+SDK 0.4.0では`StageDefinition.rewrite`と`StageOutput.bytes`を追加します。既存Stageのソースはそれぞれ`false`と`None`を指定してください。既存の加工しない配布物は本体で引き続き利用できます。[加工サンプル](../../plugins/telemetry-rewrite/README.md)を参照してください。

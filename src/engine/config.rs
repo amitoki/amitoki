@@ -23,6 +23,7 @@ const MAX_INTERVAL_MS: u64 = 300_000;
 #[serde(default, deny_unknown_fields)]
 pub struct EngineConfig {
     pub queue_capacity: usize,
+    pub relay_queue_capacity: usize,
     pub batch_size: usize,
     pub flush_interval_ms: u64,
     pub poll_interval_ms: u64,
@@ -36,6 +37,7 @@ impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             queue_capacity: DEFAULT_QUEUE_CAPACITY,
+            relay_queue_capacity: DEFAULT_QUEUE_CAPACITY,
             batch_size: DEFAULT_BATCH_SIZE,
             flush_interval_ms: DEFAULT_FLUSH_INTERVAL_MS,
             poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
@@ -49,8 +51,11 @@ impl Default for EngineConfig {
 
 impl EngineConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if !(1..=MAX_QUEUE_CAPACITY).contains(&self.queue_capacity) || !(1..=MAX_BATCH_SIZE).contains(&self.batch_size) {
-            return Err("queue_capacityは1〜65536、batch_sizeは1〜4096で指定してください");
+        if !(1..=MAX_QUEUE_CAPACITY).contains(&self.queue_capacity)
+            || !(1..=MAX_QUEUE_CAPACITY).contains(&self.relay_queue_capacity)
+            || !(1..=MAX_BATCH_SIZE).contains(&self.batch_size)
+        {
+            return Err("queue_capacityとrelay_queue_capacityは1〜65536、batch_sizeは1〜4096で指定してください");
         }
         let intervals = [
             self.flush_interval_ms,

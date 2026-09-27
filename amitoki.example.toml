@@ -14,6 +14,8 @@ replay_window_ms = 4000
 
 [engine]
 queue_capacity = 1024
+# Pipelineの中継ごとの送信上限。満杯の経路だけ新しいパケットを破棄する。
+relay_queue_capacity = 1024
 batch_size = 128
 flush_interval_ms = 10
 poll_interval_ms = 10

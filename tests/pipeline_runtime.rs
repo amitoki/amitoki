@@ -28,6 +28,9 @@ struct Transport {
     publish_calls: AtomicUsize,
     ack_calls: AtomicUsize,
     failures: usize,
+    publish_gate: Option<Arc<AcknowledgementGate>>,
+    permanent_publish_failure: bool,
+    permanent_receive_failure: bool,
     ack_failures: usize,
     ack_gate: Option<Arc<AcknowledgementGate>>,
     complete: Notify,
@@ -40,6 +43,13 @@ struct AcknowledgementGate {
 #[async_trait]
 impl Relay for Transport {
     async fn publish(&self, frames: &[Frame]) -> Result<(), RelayError> {
+        if self.permanent_publish_failure {
+            return Err(RelayError::permanent("送信プロセス終了"));
+        }
+        if let Some(gate) = &self.publish_gate {
+            gate.entered.notify_one();
+            gate.released.notified().await;
+        }
         if self.publish_calls.fetch_add(1, Ordering::SeqCst) < self.failures {
             return Err(RelayError::retryable("送信障害"));
         }
@@ -48,6 +58,9 @@ impl Relay for Transport {
         Ok(())
     }
     async fn receive(&self, limit: usize) -> Result<Vec<Delivery>, RelayError> {
+        if self.permanent_receive_failure {
+            return Err(RelayError::permanent("受信プロセス終了"));
+        }
         Ok(self.incoming.lock().unwrap().iter().take(limit).cloned().collect())
     }
     async fn acknowledge(&self, receipts: &[Receipt]) -> Result<(), RelayError> {
@@ -119,6 +132,7 @@ impl Block for Classifier {
         Ok(packets
             .iter()
             .map(|packet| BlockOutput {
+                bytes: None,
                 ports: vec![if self.invalid_port {
                     "inject"
                 } else if packet.frame.bytes[0] == 9 {
@@ -162,7 +176,22 @@ struct Harness {
     shutdown: CancellationToken,
 }
 fn harness(transports: [Arc<Transport>; 2], block: Arc<dyn Block>, config: PipelineConfig) -> Harness {
+    harness_with_settings(
+        transports,
+        block,
+        (
+            config,
+            EngineConfig {
+                batch_size: 1,
+                ..Default::default()
+            },
+        ),
+    )
+}
+fn harness_with_settings(transports: [Arc<Transport>; 2], block: Arc<dyn Block>, configuration: (PipelineConfig, EngineConfig)) -> Harness {
+    let (config, settings) = configuration;
     let definition = BlockDefinition {
+        rewrite: config.blocks[0].options["rewrite"].as_bool().unwrap_or(false),
         outputs: vec!["pass".into(), "drop".into()],
     };
     let graph = Graph::compile(&config, std::slice::from_ref(&definition)).unwrap();
@@ -183,10 +212,7 @@ fn harness(transports: [Arc<Transport>; 2], block: Arc<dyn Block>, config: Pipel
         relays: transports.into_iter().map(|relay| relay as Arc<dyn Relay>).collect(),
     };
     let settings = EngineSettings {
-        config: EngineConfig {
-            batch_size: 1,
-            ..Default::default()
-        },
+        config: settings,
         firewall: Firewall {
             policy: Policy::Blacklist,
             rules: vec![],
@@ -395,6 +421,7 @@ impl Block for WaitingStage {
         Ok(packets
             .iter()
             .map(|packet| BlockOutput {
+                bytes: None,
                 ports: vec!["pass".into()],
                 annotations: packet.annotations.clone(),
             })
@@ -408,6 +435,7 @@ fn replacement(config: &PipelineConfig, block: Arc<dyn Block>) -> amitoki::pipel
         vec![RunningBlock {
             block,
             definition: BlockDefinition {
+                rewrite: false,
                 outputs: vec!["pass".into(), "drop".into()],
             },
             on_error: ErrorPolicy::Stop,
@@ -500,4 +528,150 @@ async fn reload_retains_old_stages_until_ack_retry_finishes_without_repeating_an
     assert_eq!(first.ack_calls.load(Ordering::SeqCst), 2);
     assert_eq!(first.acknowledgements.lock().unwrap().len(), 1);
     assert_eq!(run.network.output.lock().unwrap().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_full_failed_relay_queue_does_not_block_later_packets_to_a_healthy_relay() {
+    let first = Arc::new(Transport::default());
+    let gate = Arc::new(AcknowledgementGate::default());
+    let second = Arc::new(Transport {
+        publish_gate: Some(gate.clone()),
+        ..Default::default()
+    });
+    let settings = EngineConfig {
+        batch_size: 1,
+        relay_queue_capacity: 1,
+        ..Default::default()
+    };
+    let run = harness_with_settings([first.clone(), second.clone()], Arc::new(Classifier::new()), (configuration(), settings));
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    run.input.send(bytes(1)).await.unwrap();
+    gate.entered.notified().await;
+    first.complete.notified().await;
+    for value in 2..=4 {
+        run.input.send(bytes(value)).await.unwrap();
+        first.complete.notified().await;
+    }
+    assert_eq!(first.published.lock().unwrap().len(), 4);
+    assert_eq!(run.engine.relay_metrics[1].dropped.load(Ordering::Relaxed), 3);
+    assert_eq!(run.engine.relay_metrics[1].queued.load(Ordering::Relaxed), 1);
+    assert_eq!(run.engine.relay_metrics[1].peak_queued.load(Ordering::Relaxed), 1);
+    gate.released.notify_one();
+    second.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(second.published.lock().unwrap()[0].bytes[0], 1);
+    assert_eq!(run.engine.relay_metrics[1].queued.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_blocked_ack_does_not_block_another_receiver_or_capture() {
+    let gate = Arc::new(AcknowledgementGate::default());
+    let first = Arc::new(Transport {
+        ack_gate: Some(gate.clone()),
+        ..Default::default()
+    });
+    let second = Arc::new(Transport::default());
+    enqueue(&first, &[frame(1)]);
+    let run = harness([first.clone(), second.clone()], Arc::new(Classifier::new()), configuration());
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    gate.entered.notified().await;
+    enqueue(&second, &[frame(2)]);
+    second.complete.notified().await;
+    assert_eq!(run.network.output.lock().unwrap().len(), 2);
+    run.input.send(bytes(3)).await.unwrap();
+    second.complete.notified().await;
+    assert_eq!(second.published.lock().unwrap().len(), 1);
+    gate.released.notify_one();
+    first.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_crashed_relay_does_not_stop_capture_or_other_relays() {
+    let first = Arc::new(Transport {
+        permanent_publish_failure: true,
+        permanent_receive_failure: true,
+        ..Default::default()
+    });
+    let second = Arc::new(Transport::default());
+    let run = harness([first, second.clone()], Arc::new(Classifier::new()), configuration());
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    for value in 1..=4 {
+        run.input.send(bytes(value)).await.unwrap();
+        second.complete.notified().await;
+    }
+    enqueue(&second, &[frame(5)]);
+    second.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(second.published.lock().unwrap().len(), 4);
+    assert_eq!(run.network.output.lock().unwrap().len(), 1);
+    assert_eq!(run.engine.relay_metrics[0].dropped.load(Ordering::Relaxed), 4);
+    assert_eq!(run.engine.relay_metrics[0].failures.load(Ordering::Relaxed), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn shutdown_reports_undelivered_branch_frames_and_releases_queued_generations() {
+    let first = Arc::new(Transport::default());
+    let second = Arc::new(Transport {
+        failures: usize::MAX,
+        ..Default::default()
+    });
+    let run = harness([first.clone(), second], Arc::new(Classifier::new()), configuration());
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    run.input.send(bytes(1)).await.unwrap();
+    first.complete.notified().await;
+    run.shutdown.cancel();
+    assert!(matches!(task.await.unwrap(), Err(amitoki::engine::EngineError::ShutdownTimeout(1))));
+    assert_eq!(run.engine.relay_metrics[1].queued.load(Ordering::Relaxed), 0);
+}
+
+struct RewriteStage;
+#[async_trait]
+impl Block for RewriteStage {
+    async fn process(&self, packets: &[BlockPacket]) -> Result<Vec<BlockOutput>, RelayError> {
+        Ok(packets
+            .iter()
+            .map(|packet| {
+                let mut bytes = packet.frame.bytes.to_vec();
+                bytes[0] = 7;
+                BlockOutput {
+                    bytes: Some(bytes.into()),
+                    ports: vec!["pass".into()],
+                    annotations: packet.annotations.clone(),
+                }
+            })
+            .collect())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn received_rewrites_inject_changed_bytes_once_and_acknowledge_original_receipts() {
+    let first = Arc::new(Transport {
+        ack_failures: 1,
+        ..Default::default()
+    });
+    let second = Arc::new(Transport::default());
+    let packet = frame(4);
+    enqueue(&first, std::slice::from_ref(&packet));
+    enqueue(&second, std::slice::from_ref(&packet));
+    let mut config = configuration();
+    config.blocks[0].options = json!({"rewrite":true});
+    config.routes[0].to = vec!["first".into()];
+    config.routes[1].to = vec!["inject".into()];
+    config.routes[3].to = vec!["classify".into()];
+    config.routes[4].to = vec!["classify".into()];
+    let run = harness([first.clone(), second.clone()], Arc::new(RewriteStage), config);
+    let task = tokio::spawn(run.engine.clone().run(run.shutdown.clone()));
+    first.complete.notified().await;
+    second.complete.notified().await;
+    run.shutdown.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(run.network.output.lock().unwrap().len(), 1);
+    assert_eq!(run.network.output.lock().unwrap()[0][0], 7);
+    for relay in [first, second] {
+        assert_eq!(*relay.acknowledgements.lock().unwrap(), vec![Receipt(packet.id.to_string())]);
+    }
 }

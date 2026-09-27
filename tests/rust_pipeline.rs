@@ -19,6 +19,7 @@ fn rust_connections_determine_stage_order_independently_of_registration_order() 
         .build()
         .unwrap();
     let definition = StageDefinition {
+        rewrite: false,
         outputs: vec!["pass".into(), "drop".into()],
     };
     let graph = Graph::compile(&pipeline, &[definition.clone(), definition]).unwrap();

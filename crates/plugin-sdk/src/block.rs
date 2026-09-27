@@ -1,4 +1,4 @@
-//! パケットを読み、接続先ポートと解析結果を返す。配送ID・ACK・NICは本体が管理する。
+//! 接続先・解析結果・任意の加工バイト列を返す。配送ID・ACK・NICは本体が管理する。
 mod client;
 mod server;
 use amitoki_relay::{Frame, RelayContext, RelayError};
@@ -17,6 +17,9 @@ pub const MAX_ANNOTATION_BYTES: usize = 4096;
 #[serde(deny_unknown_fields)]
 pub struct BlockDefinition {
     pub outputs: Vec<String>,
+    /// 加工を宣言するStageだけが出力のbytesを指定できる。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rewrite: bool,
 }
 impl BlockDefinition {
     pub fn validate(&self) -> Result<(), RelayError> {
@@ -53,13 +56,21 @@ impl BlockPacket {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockOutput {
-    /// 空なら破棄。複数指定は同じパケットの分岐。フレーム自体は書き換えられない。
+    /// 空なら破棄。複数指定は同じパケットの分岐。
     pub ports: Vec<String>,
     /// 次のブロックに渡すJSONオブジェクト。経路・ID・ACKには使わない。
     pub annotations: Value,
+    /// Noneは入力を維持。IDは返さず、加工後の検証とID生成は本体が行う。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<bytes::Bytes>,
 }
 impl BlockOutput {
     pub fn validate(&self, definition: &BlockDefinition) -> Result<(), RelayError> {
+        if let Some(bytes) = &self.bytes {
+            if !definition.rewrite || !(amitoki_relay::MIN_FRAME_SIZE..=amitoki_relay::MAX_FRAME_SIZE).contains(&bytes.len()) {
+                return Err(RelayError::permanent("加工が未宣言、または加工後のフレーム長が範囲外です"));
+            }
+        }
         let unique: HashSet<_> = self.ports.iter().collect();
         if self.ports.len() > MAX_OUTPUT_PORTS || self.ports.len() != unique.len() || self.ports.iter().any(|port| !definition.outputs.contains(port)) {
             return Err(RelayError::permanent("ブロックが未定義または重複したポートを返しました"));

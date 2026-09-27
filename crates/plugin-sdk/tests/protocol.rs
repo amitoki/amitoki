@@ -36,3 +36,23 @@ fn invalid_options_are_rejected_without_echoing_secret_values() {
     assert!(!error.to_string().contains("secret-value"));
     assert!(manifest.validate_options(&serde_json::json!({"typo":2})).is_err());
 }
+
+#[test]
+fn legacy_stage_output_remains_compatible_and_rewrites_require_declaration() {
+    use amitoki_plugin_sdk::block::{BlockDefinition, BlockOutput};
+    let definition: BlockDefinition = serde_json::from_value(serde_json::json!({"outputs":["pass"]})).unwrap();
+    let mut output: BlockOutput = serde_json::from_value(serde_json::json!({"ports":["pass"],"annotations":{}})).unwrap();
+    assert!(!definition.rewrite);
+    assert!(output.bytes.is_none());
+    assert!(serde_json::to_value(&definition).unwrap().get("rewrite").is_none());
+    assert!(serde_json::to_value(&output).unwrap().get("bytes").is_none());
+    output.bytes = Some(vec![0; 14].into());
+    assert!(output.validate(&definition).is_err());
+    let definition = BlockDefinition { rewrite: true, ..definition };
+    assert!(output.validate(&definition).is_ok());
+    output.bytes = Some(vec![0; 13].into());
+    assert!(output.validate(&definition).is_err());
+    output.bytes = Some(vec![0; 65536].into());
+    assert!(output.validate(&definition).is_err());
+    assert!(serde_json::from_value::<BlockOutput>(serde_json::json!({"ports":["pass"],"annotations":{},"id":"untrusted"})).is_err());
+}

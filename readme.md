@@ -8,6 +8,8 @@ v0.2.0では[Rust Pipeline/Stage・生成テスト・reload](docs/rust-stages-re
 
 種類別CLI、GitHub URL・ディレクトリからの追加、PCAPでの単体テスト・経路トレース・結果比較・変更監視は[プラグイン開発とデバッグ](docs/plugin-development.md)を参照する。
 
+開発版では中継ごとの送信キュー・ACK待ちを分離し、停止した経路だけを制限する。[パケット加工Stage](plugins/telemetry-rewrite/README.md)と[耐久・障害試験](docs/endurance.md)も利用できる。
+
 Linux向け。本体の実行ファイル・debの入手方法とCIは[インストールとリリース](docs/releases.md)、ソースからのビルドは以下を参照する。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。
 
 [stegrdbのfeat/relay-plugins](https://github.com/aida0710/stegrdb/tree/feat/relay-plugins)の履歴を引き継いだ独立プロジェクト。名前は「網＋解き」。移行手順は[amitokiへの移行](docs/amitoki-migration.md)を参照する。
