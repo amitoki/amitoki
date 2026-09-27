@@ -1,4 +1,5 @@
 /target
+/.idea/
 .env
 .env.development
 .env.production
