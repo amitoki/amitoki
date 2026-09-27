@@ -1,6 +1,6 @@
 # amitoki（あみとき）
 
-開発版では[Rust Pipeline/Stage・生成テスト・reload](docs/rust-stages-reload.md)に対応します。公開済みv0.1.0には含まれません。
+v0.2.0では[Rust Pipeline/Stage・生成テスト・reload](docs/rust-stages-reload.md)に対応します。
 
 ネットワークの解析・デバッグ・通信実験に使うRust製ツール。Ethernetフレームを解析・フィルタリングし、設定で選んだ中継方式を通して別ノードへ送る。PostgreSQL・P2Pは外部プロセス型プラグインとして追加する。本体の再ビルドは不要。メモリ中継は同一プロセス内のテスト用として組み込んでいる。
 
@@ -58,7 +58,7 @@ git submodule update --init --recursive
 ./target/release/amitoki plugin relay add ./dist/postgres
 ```
 
-Relayの設定保存・更新・削除は対象の中継を停止してから行う。使用中のRelayへの操作は拒否する。開発版のStageは稼働中に更新でき、reloadで反映する。削除後も設定は保持する。更新は実行ファイルのSHA256、通信仕様、OS・CPU、保存済み設定を検証し、原子的に入れ替える。SHA256は破損検出であり、第三者署名ではない。取得先リポジトリと認証済みHTTPSを信頼境界とする。
+Relayの設定保存・更新・削除は対象の中継を停止してから行う。使用中のRelayへの操作は拒否する。Stageは稼働中に更新でき、reloadで反映する。削除後も設定は保持する。更新は実行ファイルのSHA256、通信仕様、OS・CPU、保存済み設定を検証し、原子的に入れ替える。SHA256は破損検出であり、第三者署名ではない。取得先リポジトリと認証済みHTTPSを信頼境界とする。
 
 P2Pの鍵作成・接続設定・任意のNext.js接続情報交換サーバは[amitoki-plugin-p2p](https://github.com/amitoki/amitoki-plugin-p2p)のREADMEを参照する。
 

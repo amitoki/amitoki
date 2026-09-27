@@ -12,8 +12,8 @@ import tempfile
 from metadata import ROOT, TARGETS, build_metadata, digest, filenames, output, write_json
 
 # 配布対象を明示し、ローカル設定・VMの鍵・プラグインの接続情報を取り込まない。
-DOCUMENTS = ["readme.md", "docs"]
-EXAMPLES = ["amitoki.example.toml", "amitoki.pipeline.example.toml", "amitoki.debug.example.toml"]
+DOCUMENTS = ["readme.md", "docs", "examples"]
+EXAMPLES = ["amitoki.example.toml", "amitoki.pipeline.example.toml", "amitoki.debug.example.toml", "amitoki.rust-pipeline.example.toml"]
 MAINTAINER = "相田 優希 <51500566+aida0710@users.noreply.github.com>"
 
 

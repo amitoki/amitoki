@@ -6,7 +6,7 @@ resolver = "2"
 [package]
 name = "amitoki"
 default-run = "amitoki"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["相田 優希 <51500566+aida0710@users.noreply.github.com>"]
 edition = "2021"
 
