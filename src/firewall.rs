@@ -2,7 +2,7 @@ use crate::packet::{parse_frame, MacAddress, PacketError, PacketMetadata};
 use serde::Deserialize;
 use std::net::IpAddr;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Policy {
     #[default]
@@ -10,7 +10,7 @@ pub enum Policy {
     Blacklist,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", content = "value", deny_unknown_fields)]
 pub enum Filter {
     SrcMacAddress(MacAddress),
@@ -38,7 +38,7 @@ impl Filter {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Firewall {
     pub policy: Policy,

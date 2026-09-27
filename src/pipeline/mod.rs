@@ -1,9 +1,12 @@
 mod config;
 mod connections;
-pub use connections::Connections;
+pub use connections::{Connections, PipelineConnections};
 mod executor;
+mod generation;
 pub mod graph;
 mod history;
+use generation::GenerationStore;
+pub use generation::PreparedPipeline;
 pub(crate) mod plan;
 mod sources;
 pub(crate) mod trace;
@@ -21,8 +24,7 @@ use tokio::{sync::mpsc, task::JoinSet, time::timeout};
 use tokio_util::sync::CancellationToken;
 
 pub struct PipelineEngine {
-    graph: Graph,
-    blocks: Vec<RunningBlock>,
+    generations: GenerationStore,
     relays: Vec<Arc<dyn Relay>>,
     network: Arc<dyn PacketIo>,
     settings: EngineSettings,
@@ -34,14 +36,22 @@ impl PipelineEngine {
     pub fn new(connections: Connections, network: Arc<dyn PacketIo>, settings: EngineSettings) -> Result<Self, EngineError> {
         settings.config.validate().map_err(|error| EngineError::Worker(error.into()))?;
         Ok(Self {
-            graph: connections.graph,
-            blocks: connections.blocks,
+            generations: GenerationStore::new(PreparedPipeline {
+                graph: connections.graph,
+                blocks: connections.blocks,
+            }),
             relays: connections.relays,
             network,
             settings,
             metrics: Metrics::default(),
             pipeline_metrics: PipelineMetrics::default(),
         })
+    }
+    pub fn generation(&self) -> u64 {
+        self.generations.active().number
+    }
+    pub fn activate(&self, prepared: PreparedPipeline) -> Result<u64, String> {
+        self.generations.replace(prepared)
     }
     pub async fn run(self: Arc<Self>, shutdown: CancellationToken) -> Result<(), EngineError> {
         if shutdown.is_cancelled() {

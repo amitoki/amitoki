@@ -18,7 +18,7 @@ impl PluginKind {
     pub fn name(self) -> &'static str {
         match self {
             Self::Relay => "relay",
-            Self::Block => "block",
+            Self::Block => "stage",
         }
     }
 

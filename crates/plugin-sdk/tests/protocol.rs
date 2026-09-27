@@ -23,6 +23,7 @@ async fn adjacent_messages_keep_their_boundaries() {
 #[test]
 fn invalid_options_are_rejected_without_echoing_secret_values() {
     let manifest = PluginManifest {
+        packets: vec![],
         name: "example".into(),
         version: "1.0.0".into(),
         protocol_version: PROTOCOL_VERSION,

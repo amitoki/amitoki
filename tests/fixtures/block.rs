@@ -1,4 +1,5 @@
 //! 外部ブロックの設定・キャンセル・権限検証用。配布対象ではない。
+use amitoki_plugin_sdk::packet::{telemetry::TelemetryGenerator, GenerateRequest, PacketGenerator};
 use amitoki_plugin_sdk::{
     block::{serve_block, Block, BlockContext, BlockDefinition, BlockOutput, BlockPacket, BlockPlugin},
     PluginManifest, PROTOCOL_VERSION,
@@ -14,7 +15,17 @@ struct Instance {
 }
 #[async_trait]
 impl BlockPlugin for Fixture {
+    fn generate(&self, request: &GenerateRequest) -> Result<Vec<Vec<u8>>, RelayError> {
+        (request.start..request.start + request.count as u64)
+            .map(|index| TelemetryGenerator.generate(index, request.seed, &request.options).map_err(RelayError::permanent))
+            .collect()
+    }
     async fn connect(&self, context: BlockContext, options: Value) -> Result<Arc<dyn Block>, RelayError> {
+        match options["mode"].as_str() {
+            Some("init-fail") => return Err(RelayError::permanent("fixtureの初期化失敗")),
+            Some("init-hang") => return std::future::pending().await,
+            _ => {},
+        }
         Ok(Arc::new(Instance {
             mode: options["mode"].as_str().unwrap_or("pass").into(),
             instance: context.instance,
@@ -71,10 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = PluginManifest {
         name: "block-fixture".into(),
         version: "0.1.0".into(),
+        packets: vec![TelemetryGenerator.definition()],
         protocol_version: PROTOCOL_VERSION,
         description: String::new(),
         block: Some(BlockDefinition { outputs: vec!["pass".into()] }),
-        config_schema: json!({"type":"object","additionalProperties":false,"properties":{"mode":{"type":"string","enum":["pass","drop","delay","crash","capabilities","oversize","invalid"]}}}),
+        config_schema: json!({"type":"object","additionalProperties":false,"properties":{"mode":{"type":"string","enum":["pass","drop","delay","crash","capabilities","oversize","invalid","init-fail","init-hang"]}}}),
     };
     if std::env::args().any(|argument| argument == "--describe") {
         println!("{}", serde_json::to_string(&manifest)?);

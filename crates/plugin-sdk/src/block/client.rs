@@ -12,6 +12,7 @@ use std::path::Path;
 pub struct ProcessBlock {
     process: ProcessClient,
     definition: BlockDefinition,
+    manifest: PluginManifest,
 }
 impl ProcessBlock {
     pub async fn connect(executable: &Path, manifest: &PluginManifest, configuration: (BlockContext, Value)) -> Result<Self, RelayError> {
@@ -26,11 +27,25 @@ impl ProcessBlock {
                 options,
             })
             .await?;
-        Ok(Self { process, definition })
+        Ok(Self {
+            process,
+            definition,
+            manifest: manifest.clone(),
+        })
     }
 }
 #[async_trait]
 impl Block for ProcessBlock {
+    async fn generate(&self, request: &amitoki_packet::GenerateRequest) -> Result<Vec<Vec<u8>>, RelayError> {
+        crate::generation::validate_request(&self.manifest, request)?;
+        match self.process.call(Request::Generate(request.clone())).await? {
+            Response::Generated(packets) => {
+                crate::generation::validate_packets(request, &packets)?;
+                Ok(packets)
+            },
+            _ => Err(RelayError::permanent("パケット生成の応答が不正です")),
+        }
+    }
     async fn process(&self, packets: &[BlockPacket]) -> Result<Vec<BlockOutput>, RelayError> {
         if packets.len() > MAX_BATCH {
             return Err(RelayError::permanent("解析バッチの上限を超えています"));

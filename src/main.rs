@@ -1,3 +1,4 @@
+use amitoki::pipeline::PipelineConnections;
 use amitoki::{
     config::AppConfig,
     engine::{Engine, EngineSettings},
@@ -25,6 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if arguments.first().map(String::as_str) == Some("plugin") {
         return run_cli(&arguments[1..]).await;
     }
+    if arguments.first().map(String::as_str) == Some("reload") {
+        return amitoki::control::run_cli(&arguments[1..]).await;
+    }
     if arguments.first().map(String::as_str) == Some("debug") {
         return amitoki::debug::run_cli(&arguments[1..]).await;
     }
@@ -38,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if arguments == ["--help"] || arguments == ["-h"] {
-        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki --version\namitoki plugin --help\namitoki debug --help");
+        println!("amitoki [--config PATH] [--check-config]\namitoki --list-plugins\namitoki --version\namitoki plugin --help\namitoki debug --help\namitoki reload --help");
         return Ok(());
     }
     let mut path = PathBuf::from("amitoki.toml");
@@ -51,7 +55,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("不明な引数: {argument}").into()),
         }
     }
+    let path = amitoki::plugin_manager::expand_path(&path)?.canonicalize()?;
     let config = AppConfig::load(&path)?;
+    let baseline = config.clone();
     if let Some(relay) = &config.relay {
         if !registry.names().contains(&relay.plugin.as_str()) {
             store.resolved_options(&relay.plugin, &relay.options)?;
@@ -69,6 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(dotenv::Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {},
         Err(_) => return Err(".envを読み込めません（認証情報保護のため内容は表示しません）".into()),
     }
+    let control_server = amitoki::control::ControlServer::bind(&path)?;
     let network = Arc::new(LinuxSocket::open(&config.interface, config.promiscuous)?);
     // 同じUIDの子から/proc経由で本体のNICを開かせない。プラグインのOS隔離とは別の保護。
     if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
@@ -93,6 +100,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     info!("中継を開始します: node={}, channel={}", config.node_id, config.channel);
     let shutdown = CancellationToken::new();
+    let pipeline = match &engine {
+        Runtime::Pipeline(engine) => Some(engine.clone()),
+        Runtime::Relay(_) => None,
+    };
+    let reloader = amitoki::control::Reloader::new(amitoki::control::ReloadSource { path, baseline, store }, pipeline);
+    let controlling = control_server.run(reloader, shutdown.clone());
+    tokio::pin!(controlling);
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let signals = async {
         tokio::select! { outcome = tokio::signal::ctrl_c() => outcome, _ = terminate.recv() => Ok(()) }
@@ -101,6 +115,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::pin!(running);
     let outcome = tokio::select! {
         outcome = &mut running => outcome,
+        control_outcome = &mut controlling => {
+            shutdown.cancel();
+            let _ = running.await;
+            control_outcome?;
+            return Err("制御処理が予期せず終了しました".into());
+        },
         signal = signals => {
             shutdown.cancel();
             let outcome = running.await;
@@ -108,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             outcome
         },
     };
+    shutdown.cancel();
     info!(
         "中継終了: capture={}, publish={}, inject={}, filter={}, reject={}, retry={}",
         engine.metrics().captured.load(Ordering::Relaxed),

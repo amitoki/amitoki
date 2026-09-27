@@ -75,6 +75,18 @@ pub(super) struct ReplayPlan {
 }
 impl ReplayPlan {
     pub async fn run(&self, mut reader: ReplayReader) -> ManagerResult<()> {
+        while let Some((capture, mut report)) = reader.next()? {
+            let outcome = self.process_capture(capture, &mut report).await;
+            reader.write(&report)?;
+            outcome?;
+        }
+        Ok(())
+    }
+
+    pub async fn process_capture(&self, capture: CapturePacket, report: &mut PacketReport) -> ManagerResult<()> {
+        let Some(frame) = admit(capture, report, &self.firewall) else {
+            return Ok(());
+        };
         let metrics = PipelineMetrics::default();
         let planner = Planner {
             graph: &self.graph,
@@ -82,30 +94,23 @@ impl ReplayPlan {
             metrics: &metrics,
             operation_timeout: self.operation_timeout,
         };
-        while let Some((capture, mut report)) = reader.next()? {
-            let Some(frame) = admit(capture, &mut report, &self.firewall) else {
-                reader.write(&report)?;
-                continue;
-            };
-            let mut trace = Vec::new();
-            let outcome = planner.prepare_traced(&[frame], &self.entry, Some(&mut trace)).await;
-            report.steps = trace.into_iter().map(|event| self.step(event)).collect();
-            match &outcome {
-                Ok(plan) => {
-                    for (name, frames) in self.relay_names.iter().zip(&plan.relays) {
-                        if !frames.is_empty() {
-                            report.terminals.push(name.clone());
-                        }
+        let mut trace = Vec::new();
+        let outcome = planner.prepare_traced(&[frame], &self.entry, Some(&mut trace)).await;
+        report.steps = trace.into_iter().map(|event| self.step(event)).collect();
+        match &outcome {
+            Ok(plan) => {
+                for (name, frames) in self.relay_names.iter().zip(&plan.relays) {
+                    if !frames.is_empty() {
+                        report.terminals.push(name.clone());
                     }
-                    if !plan.inject.is_empty() {
-                        report.terminals.push("inject".into());
-                    }
-                },
-                Err(error) => report.error = Some(error.to_string()),
-            }
-            reader.write(&report)?;
-            outcome?;
+                }
+                if !plan.inject.is_empty() {
+                    report.terminals.push("inject".into());
+                }
+            },
+            Err(error) => report.error = Some(error.to_string()),
         }
+        outcome?;
         Ok(())
     }
 

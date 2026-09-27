@@ -44,7 +44,8 @@ impl ProcessClient {
                     && actual.version == manifest.version
                     && actual.protocol_version == PROTOCOL_VERSION
                     && actual.config_schema == manifest.config_schema
-                    && actual.block == manifest.block => {},
+                    && actual.block == manifest.block
+                    && actual.packets == manifest.packets => {},
             _ => return Err(RelayError::permanent("実行ファイルとプラグインの定義が一致しません")),
         }
         Ok(process)

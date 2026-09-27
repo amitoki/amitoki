@@ -171,10 +171,7 @@ fn timed_out_builds_stop_their_descendants_and_skip_the_test() {
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("タイムアウト"));
     let pid = fs::read_to_string(lab.root.path().join("descendant")).unwrap();
-    // 親が終了した直後はinitによる回収前のzombieが残る場合がある。
-    if let Ok(status) = fs::read_to_string(format!("/proc/{}/stat", pid.trim())) {
-        assert_eq!(status.split(')').nth(1).unwrap().trim().chars().next(), Some('Z'));
-    }
+    assert_descendant_stopped(pid.trim());
 }
 
 #[test]
@@ -184,7 +181,32 @@ fn termination_stops_a_running_build_before_starting_the_test() {
     watch.wait_for("signal-ready");
     watch.stop();
     let pid = fs::read_to_string(lab.root.path().join("descendant")).unwrap();
-    if let Ok(status) = fs::read_to_string(format!("/proc/{}/stat", pid.trim())) {
-        assert_eq!(status.split(')').nth(1).unwrap().trim().chars().next(), Some('Z'));
+    assert_descendant_stopped(pid.trim());
+}
+
+// killの成功と終了は別なので、/procの瞬間的なR/Zではなくカーネルの終了通知を待つ。
+fn assert_descendant_stopped(pid: &str) {
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    let pid: i32 = pid.parse().unwrap();
+    let descriptor = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) } as i32;
+    if descriptor < 0 {
+        assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
+        return;
+    }
+    let descriptor = unsafe { OwnedFd::from_raw_fd(descriptor) };
+    let deadline = Instant::now() + EVENT_TIMEOUT;
+    loop {
+        let mut event = libc::pollfd {
+            fd: descriptor.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let remaining = deadline.saturating_duration_since(Instant::now()).as_millis().min(i32::MAX as u128) as i32;
+        let status = unsafe { libc::poll(&mut event, 1, remaining) };
+        if status < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+            continue;
+        }
+        assert!(status > 0 && event.revents & libc::POLLIN != 0, "watch終了後も子孫プロセスが動いています");
+        break;
     }
 }

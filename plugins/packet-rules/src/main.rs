@@ -30,6 +30,7 @@ fn manifest() -> PluginManifest {
     PluginManifest {
         name: "packet-rules".into(),
         version: env!("CARGO_PKG_VERSION").into(),
+        packets: vec![],
         protocol_version: PROTOCOL_VERSION,
         description: "EtherTypeによる解析・フィルタの参考実装。空の許可一覧は全通過。".into(),
         block: Some(BlockDefinition {

@@ -8,6 +8,7 @@ StartLimitIntervalSec=0
 [Service]
 User=amitoki
 ExecStart=/opt/amitoki-lab/amitoki --config /opt/amitoki-lab/amitoki.toml
+ExecReload=/bin/kill -HUP $MAINPID
 Environment=AMITOKI_PLUGIN_DIR=/opt/amitoki-lab/plugins
 EnvironmentFile=/opt/amitoki-lab/postgres.env
 AmbientCapabilities=CAP_NET_RAW

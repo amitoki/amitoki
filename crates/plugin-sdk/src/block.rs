@@ -12,8 +12,6 @@ use std::{collections::HashSet, sync::Arc};
 // 分岐と解析結果のサイズを制限し、プラグインの出力で処理量を無制限に増やさない。
 pub const MAX_OUTPUT_PORTS: usize = 8;
 pub const MAX_ANNOTATION_BYTES: usize = 4096;
-// TOMLの経路識別子とIPCの文字列サイズを揃える。
-const MAX_IDENTIFIER_BYTES: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -30,9 +28,7 @@ impl BlockDefinition {
     }
 }
 
-pub fn valid_identifier(value: &str) -> bool {
-    !value.is_empty() && value.len() <= MAX_IDENTIFIER_BYTES && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_')
-}
+pub use amitoki_pipeline::valid_identifier;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,10 +77,16 @@ fn validate_annotations(annotations: &Value) -> Result<(), RelayError> {
 
 #[async_trait]
 pub trait Block: Send + Sync {
+    async fn generate(&self, _request: &amitoki_packet::GenerateRequest) -> Result<Vec<Vec<u8>>, RelayError> {
+        Err(RelayError::permanent("このStageはパケット生成に対応していません"))
+    }
     /// 入力順に1件ずつ結果を返す。再試行は本体が行わず、配送の再試行でも再実行しない。
     async fn process(&self, packets: &[BlockPacket]) -> Result<Vec<BlockOutput>, RelayError>;
 }
 #[async_trait]
 pub trait BlockPlugin: Send + Sync {
+    fn generate(&self, _request: &amitoki_packet::GenerateRequest) -> Result<Vec<Vec<u8>>, RelayError> {
+        Err(RelayError::permanent("このStageはパケット生成に対応していません"))
+    }
     async fn connect(&self, context: BlockContext, options: Value) -> Result<Arc<dyn Block>, RelayError>;
 }

@@ -56,6 +56,13 @@ jobs:
       - run: cargo test -p amitoki --no-default-features --locked
       - run: cargo build --release --bin amitoki --locked
       - run: bash scripts/build-packet-rules.sh
+      - run: bash scripts/build-telemetry.sh
+      - name: Exercise Rust Pipeline and generated packets
+        run: |
+          cargo run --locked --example pipeline -- /tmp/amitoki-pipeline.json
+          target/release/amitoki plugin stage test ./dist/telemetry --packet telemetry-v1 --count 1000 --json > /tmp/amitoki-generated.jsonl
+          target/release/amitoki plugin stage bench ./dist/telemetry --packet telemetry-v1 --count 1000 --json
+          target/release/amitoki plugin stage watch ./dist/telemetry --packet telemetry-v1 --count 10 --once --json > /tmp/amitoki-watch-generated.jsonl
       - name: Package and verify both distribution formats
         env:
           RELEASE_TARGET: ${{ matrix.target }}

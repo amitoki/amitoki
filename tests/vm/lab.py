@@ -14,13 +14,14 @@ import scenarios
 from settings import NODES, ROOT, SSH_PORTS, STATE
 
 
-def up(relay, pipeline):
+def up(relay, pipeline, nodes=NODES):
     subprocess.run(["cargo", "build", "--release", "--bin", "amitoki", "--locked"], cwd=ROOT, check=True)
     for plugin in ("postgres", "p2p"):
         subprocess.run(["cargo", "build", "--release", "--locked", "--manifest-path", f"plugins/{plugin}/Cargo.toml"], cwd=ROOT, check=True)
         subprocess.run([sys.executable, "scripts/package-plugin.py", f"plugins/{plugin}/target/release/amitoki-plugin-{plugin}", str(STATE / "packages" / plugin)], cwd=ROOT, check=True)
     subprocess.run(["cargo", "build", "--release", "--locked", "-p", "amitoki-block-packet-rules"], cwd=ROOT, check=True)
     subprocess.run([sys.executable, "scripts/package-plugin.py", "target/release/amitoki-plugin-packet-rules", str(STATE / "packages" / "packet-rules")], cwd=ROOT, check=True)
+    subprocess.run(["bash", "scripts/build-telemetry.sh"], cwd=ROOT, check=True)
     identities = STATE / "identities"
     identities.mkdir(exist_ok=True)
     for node in NODES:
@@ -30,6 +31,8 @@ def up(relay, pipeline):
     image = images.prepare_image()
     # まずDBを持つ1台を起動し、その準備が済んでから3台へ広げる。
     for node in NODES:
+        if node not in nodes:
+            continue
         images.seed_guest(node, image)
         qemu.start(node)
         qemu.wait_ready(node)
@@ -41,7 +44,7 @@ def up(relay, pipeline):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("up", "test", "status", "ssh", "down", "destroy"))
+    parser.add_argument("action", choices=("up", "test", "reload-test", "status", "ssh", "down", "destroy"))
     parser.add_argument("node", nargs="?", choices=NODES)
     parser.add_argument("--relay", choices=("postgres", "p2p", "both"))
     parser.add_argument("--pipeline", action=argparse.BooleanOptionalAction, default=None, help="解析・フィルタを含むブロック構成で起動")
@@ -57,9 +60,12 @@ def main():
     with (STATE / "lab.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if options.action == "up":
-            up(relay, pipeline)
+            up(relay, pipeline, (options.node,) if options.node else NODES)
         elif options.action == "test":
             scenarios.run_tests(relay, pipeline)
+        elif options.action == "reload-test":
+            import reload_checks
+            reload_checks.run((options.node,) if options.node else NODES)
         elif options.action == "status":
             for node in NODES:
                 print(f"{node}: {'running' if qemu.is_running(node) else 'stopped'} (SSH 127.0.0.1:{SSH_PORTS[node]})")

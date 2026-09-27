@@ -43,7 +43,7 @@ fn package(path: &Path) {
     package_fixture::write_package(&executable(), path);
 }
 #[tokio::test]
-async fn installed_blocks_have_independent_instances_and_hold_the_package_lock() {
+async fn installed_stages_keep_their_snapshot_after_update_configuration_and_removal() {
     let bundle = tempfile::tempdir().unwrap();
     package(bundle.path());
     let root = tempfile::tempdir().unwrap();
@@ -55,12 +55,14 @@ async fn installed_blocks_have_independent_instances_and_hold_the_package_lock()
     let second = store.connect_block("block-fixture", context("second"), json!({"mode":"pass"})).await.unwrap();
     assert_eq!(first.process(&[packet(1)]).await.unwrap()[0].annotations["instance"], "first");
     assert_eq!(second.process(&[packet(1)]).await.unwrap()[0].annotations["instance"], "second");
-    assert!(store.remove("block-fixture").is_err());
-    assert!(store.install(bundle.path(), true).is_err());
-    drop(first);
-    assert!(store.remove("block-fixture").is_err());
-    drop(second);
+    store.save_options("block-fixture", &json!({"mode":"drop"})).unwrap();
+    store.install(bundle.path(), true).unwrap();
+    let third = store.connect_block("block-fixture", context("third"), json!({})).await.unwrap();
+    assert!(third.process(&[packet(1)]).await.unwrap()[0].ports.is_empty());
     store.remove("block-fixture").unwrap();
+    assert_eq!(first.process(&[packet(1)]).await.unwrap()[0].ports, vec!["pass"]);
+    assert_eq!(second.process(&[packet(1)]).await.unwrap()[0].ports, vec!["pass"]);
+    assert!(third.process(&[packet(1)]).await.unwrap()[0].ports.is_empty());
 }
 #[tokio::test]
 async fn cancelled_processing_does_not_mix_responses_between_packets() {

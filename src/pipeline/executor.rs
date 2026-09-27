@@ -1,4 +1,4 @@
-use super::{sources::Job, PipelineEngine};
+use super::{generation::Generation, sources::Job, PipelineEngine};
 use crate::engine::{retry::retry_operation, EngineError};
 use amitoki_plugin_sdk::wire::MAX_BATCH;
 use amitoki_relay::{Delivery, Frame};
@@ -27,36 +27,45 @@ pub(super) async fn execute(engine: Arc<PipelineEngine>, mut receiver: mpsc::Rec
             },
         };
         match job {
-            Job::Captured(frame) => {
+            Job::Captured { frame, generation } => {
                 let mut frames = vec![frame];
                 let flush = sleep(Duration::from_millis(engine.settings.config.flush_interval_ms));
                 tokio::pin!(flush);
                 while frames.len() < engine.settings.config.batch_size.min(MAX_BATCH) {
                     let next = tokio::select! { _ = &mut flush => break, next = receiver.recv() => next };
                     match next {
-                        Some(Job::Captured(frame)) => frames.push(frame),
+                        Some(Job::Captured {
+                            frame,
+                            generation: next_generation,
+                        }) if Arc::ptr_eq(&generation, &next_generation) => frames.push(frame),
                         next => {
                             pending = next;
                             break;
                         },
                     }
                 }
-                publish(engine.clone(), &frames).await?;
+                publish((&engine, &generation), &frames).await?;
                 for frame in &frames {
                     recent.nic_seen.insert(frame.id);
                 }
                 engine.metrics.published.fetch_add(frames.len() as u64, Ordering::Relaxed);
             },
-            Job::Received { source, deliveries, completed } => {
-                deliver((&engine, source), deliveries, &mut recent).await?;
+            Job::Received {
+                source,
+                deliveries,
+                completed,
+                generation,
+            } => {
+                deliver((&engine, &generation, source), deliveries, &mut recent).await?;
                 let _ = completed.send(());
             },
         }
     }
 }
 
-async fn publish(engine: Arc<PipelineEngine>, frames: &[Frame]) -> Result<(), EngineError> {
-    let plan = engine.prepare(frames, &engine.graph.capture).await?;
+async fn publish(context: (&Arc<PipelineEngine>, &Generation), frames: &[Frame]) -> Result<(), EngineError> {
+    let (engine, generation) = context;
+    let plan = engine.prepare(generation, frames, &generation.graph.capture).await?;
     let mut branches = JoinSet::new();
     for (index, frames) in plan.relays.into_iter().enumerate() {
         if frames.is_empty() {
@@ -74,8 +83,8 @@ async fn publish(engine: Arc<PipelineEngine>, frames: &[Frame]) -> Result<(), En
     Ok(())
 }
 
-async fn deliver(source: (&PipelineEngine, usize), deliveries: Vec<Delivery>, recent: &mut DeliveryHistory) -> Result<(), EngineError> {
-    let (engine, index) = source;
+async fn deliver(source: (&PipelineEngine, &Generation, usize), deliveries: Vec<Delivery>, recent: &mut DeliveryHistory) -> Result<(), EngineError> {
+    let (engine, generation, index) = source;
     let mut batch_ids = HashSet::new();
     let frames: Vec<_> = deliveries
         .iter()
@@ -92,7 +101,7 @@ async fn deliver(source: (&PipelineEngine, usize), deliveries: Vec<Delivery>, re
             Some(frame.clone())
         })
         .collect();
-    let plan = engine.prepare(&frames, &engine.graph.received[index]).await?;
+    let plan = engine.prepare(generation, &frames, &generation.graph.received[index]).await?;
     let inject: HashSet<_> = plan.inject.iter().map(|frame| frame.id).collect();
     let mut receipts = Vec::new();
     let mut failure = None;

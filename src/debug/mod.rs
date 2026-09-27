@@ -1,10 +1,13 @@
 //! NICと中継を起動せず、保存パケットで実際のブロック処理を検証する。
+pub mod bench;
 mod block_test;
 mod compare;
+mod generated;
 mod pcap;
 mod replay;
 mod report;
 mod runner;
+mod stage_session;
 pub mod watch;
 
 use crate::plugin_manager::{source::expand_path, ManagerResult, PluginStore};
@@ -16,8 +19,21 @@ use std::path::PathBuf;
 pub struct BlockTestArguments {
     /// 配布ディレクトリ、追加済みの名前またはGitHub URL
     pub target: String,
-    #[arg(long)]
-    pub pcap: PathBuf,
+    #[arg(long, conflicts_with = "packet", required_unless_present = "packet")]
+    pub pcap: Option<PathBuf>,
+    /// Rustで定義したパケット生成器の名前
+    #[arg(long, conflicts_with = "pcap", required_unless_present = "pcap")]
+    pub packet: Option<String>,
+    /// 生成器を提供する別のStageプラグイン（省略時はテスト対象）
+    #[arg(long, requires = "packet")]
+    pub generator: Option<String>,
+    #[arg(long, default_value_t = 1000, value_parser = clap::value_parser!(u64).range(1..=1_000_000_000))]
+    pub count: u64,
+    #[arg(long, default_value_t = 42)]
+    pub seed: u64,
+    /// パケットの生成条件
+    #[arg(long = "packet-set", requires = "packet")]
+    pub packet_assignments: Vec<String>,
     /// 保存済みの設定を変更せず、このテストだけ上書き
     #[arg(long = "set")]
     pub assignments: Vec<String>,

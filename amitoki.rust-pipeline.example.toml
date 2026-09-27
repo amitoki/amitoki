@@ -1,0 +1,11 @@
+node_id = "node-a"
+channel = "lab"
+interface = "eth0"
+pipeline_file = "pipeline.json"
+
+[firewall]
+policy = "whitelist"
+rules = [{ type = "EtherType", value = 34997 }]
+
+[engine]
+reload_timeout_ms = 30000

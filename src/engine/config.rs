@@ -12,12 +12,14 @@ const DEFAULT_RETRY_INTERVAL_MS: u64 = 100;
 const DEFAULT_OPERATION_TIMEOUT_MS: u64 = 10_000;
 // 通常の操作タイムアウトより長く取り、停止時にバッファを送れるようにする。
 const DEFAULT_SHUTDOWN_TIMEOUT_MS: u64 = 30_000;
+// 新世代の全Stageのコピー・検証・初期化に使う上限。
+const DEFAULT_RELOAD_TIMEOUT_MS: u64 = 30_000;
 // 誤設定による極端なメモリ確保や停止待ちを拒否する。
 const MAX_QUEUE_CAPACITY: usize = 65_536;
 const MAX_BATCH_SIZE: usize = 4096;
 const MAX_INTERVAL_MS: u64 = 300_000;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EngineConfig {
     pub queue_capacity: usize,
@@ -27,6 +29,7 @@ pub struct EngineConfig {
     pub retry_interval_ms: u64,
     pub operation_timeout_ms: u64,
     pub shutdown_timeout_ms: u64,
+    pub reload_timeout_ms: u64,
 }
 
 impl Default for EngineConfig {
@@ -39,6 +42,7 @@ impl Default for EngineConfig {
             retry_interval_ms: DEFAULT_RETRY_INTERVAL_MS,
             operation_timeout_ms: DEFAULT_OPERATION_TIMEOUT_MS,
             shutdown_timeout_ms: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+            reload_timeout_ms: DEFAULT_RELOAD_TIMEOUT_MS,
         }
     }
 }
@@ -54,6 +58,7 @@ impl EngineConfig {
             self.retry_interval_ms,
             self.operation_timeout_ms,
             self.shutdown_timeout_ms,
+            self.reload_timeout_ms,
         ];
         if intervals.iter().any(|value| !(1..=MAX_INTERVAL_MS).contains(value)) {
             return Err("待機時間は1〜300000ミリ秒で指定してください");
@@ -61,6 +66,9 @@ impl EngineConfig {
         Ok(())
     }
 
+    pub(crate) fn reload_timeout(&self) -> Duration {
+        Duration::from_millis(self.reload_timeout_ms)
+    }
     pub(crate) fn operation_timeout(&self) -> Duration {
         Duration::from_millis(self.operation_timeout_ms)
     }

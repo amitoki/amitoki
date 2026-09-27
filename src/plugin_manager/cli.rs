@@ -21,6 +21,7 @@ enum RootOperation {
     /// 通信を中継するプラグイン
     Relay(Operations),
     /// 解析・フィルタ・分岐を行うプラグイン
+    #[command(name = "stage", alias = "block")]
     Block(Operations),
     #[command(flatten)]
     Legacy(Operation),
@@ -42,7 +43,7 @@ enum Operation {
         #[arg(long)]
         version: Option<String>,
     },
-    /// 停止中のプラグインを更新
+    /// Stageは稼働中も更新できる。反映にはreloadが必要
     Update {
         target: String,
         #[arg(long)]
@@ -63,11 +64,13 @@ enum Operation {
     },
     /// 設定を検証（接続しない）
     Validate { target: String },
-    /// 停止中のプラグインを削除（設定は保持）
+    /// 登録を削除（設定は保持、稼働中のStageは継続）
     #[command(name = "del", alias = "remove")]
     Remove { target: String },
-    /// PCAPを入力してブロック単体を検証
+    /// PCAPまたはRust定義の生成パケットでStageを検証
     Test(crate::debug::BlockTestArguments),
+    /// 生成パケットでStageとIPCの処理速度・バッチ遅延を測定
+    Bench(crate::debug::bench::BenchArguments),
     /// ソース変更後にビルドし、PCAP単体テストを繰り返す
     Watch(crate::debug::watch::WatchArguments),
 }
@@ -130,13 +133,19 @@ pub async fn run_cli(arguments: &[String]) -> ManagerResult<()> {
         },
         Operation::Watch(arguments) => {
             if kind != Some(PluginKind::Block) {
-                return Err("watchはplugin block watchで実行してください".into());
+                return Err("watchはplugin stage watchで実行してください".into());
             }
-            crate::debug::watch::watch(arguments).await?;
+            crate::debug::watch::watch(&store, arguments).await?;
+        },
+        Operation::Bench(arguments) => {
+            if kind == Some(PluginKind::Relay) {
+                return Err("benchはStage用です".into());
+            }
+            crate::debug::bench::run(&store, arguments).await?;
         },
         Operation::Test(arguments) => {
             if kind != Some(PluginKind::Block) {
-                return Err("単体テストはplugin block testで実行してください".into());
+                return Err("単体テストはplugin stage testで実行してください".into());
             }
             crate::debug::test_block(&store, arguments).await?;
         },

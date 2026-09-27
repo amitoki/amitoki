@@ -1,4 +1,5 @@
 use super::runner::{ReplayInput, ReplayPlan, ReplayReader};
+use crate::pipeline::PipelineConnections;
 use crate::{
     config::AppConfig,
     plugin_manager::{ManagerResult, PluginStore},
@@ -9,7 +10,9 @@ pub(super) async fn replay(store: &PluginStore, path: &Path, input: ReplayInput)
     let config = AppConfig::load(path)?;
     let context = config.context();
     let pipeline = config.pipeline.ok_or("経路トレースにはpipeline設定を指定してください")?;
-    let graph = pipeline.check(store, &context)?;
+    pipeline.check(store, &context)?;
+    let blocks = pipeline.connect_blocks(store, &context).await?;
+    let graph = crate::pipeline::graph::Graph::compile(&pipeline, &blocks.iter().map(|block| block.definition.clone()).collect::<Vec<_>>())?;
     let entry = if input.source == "capture" {
         graph.capture.clone()
     } else {
@@ -21,7 +24,6 @@ pub(super) async fn replay(store: &PluginStore, path: &Path, input: ReplayInput)
         graph.received[index].clone()
     };
     let reader = ReplayReader::open(input)?;
-    let blocks = pipeline.connect_blocks(store, &context).await?;
     ReplayPlan {
         graph,
         blocks,

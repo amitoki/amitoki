@@ -1,5 +1,5 @@
 //! 各中継の取得は独立させ、受領バッチの処理が終わるまで次を取得しない。
-use super::PipelineEngine;
+use super::{generation::Generation, PipelineEngine};
 use crate::engine::EngineError;
 use amitoki_plugin_sdk::wire::MAX_BATCH;
 use amitoki_relay::{Delivery, Frame, RelayError, MAX_FRAME_SIZE};
@@ -15,9 +15,13 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 pub(super) enum Job {
-    Captured(Frame),
+    Captured {
+        frame: Frame,
+        generation: Arc<Generation>,
+    },
     Received {
         source: usize,
+        generation: Arc<Generation>,
         deliveries: Vec<Delivery>,
         completed: oneshot::Sender<()>,
     },
@@ -41,7 +45,10 @@ pub(super) async fn capture(engine: Arc<PipelineEngine>, sender: mpsc::Sender<Jo
         }
         let frame = Frame::new(Bytes::copy_from_slice(bytes))?;
         engine.metrics.captured.fetch_add(1, Ordering::Relaxed);
-        permit.send(Job::Captured(frame));
+        permit.send(Job::Captured {
+            frame,
+            generation: engine.generations.active(),
+        });
     }
 }
 
@@ -61,10 +68,16 @@ pub(super) async fn receive(source: (Arc<PipelineEngine>, usize), sender: mpsc::
                     delivery.frame.validate()?;
                 }
                 let (completed, processed) = oneshot::channel();
-                tokio::select! {
+                let permit = tokio::select! {
                     _ = shutdown.cancelled() => return Ok(()),
-                    sent = sender.send(Job::Received { source: index, deliveries, completed }) => sent.map_err(|_| EngineError::Worker("入力キューが閉じました".into()))?,
-                }
+                    permit = sender.reserve() => permit.map_err(|_| EngineError::Worker("入力キューが閉じました".into()))?,
+                };
+                permit.send(Job::Received {
+                    source: index,
+                    deliveries,
+                    completed,
+                    generation: engine.generations.active(),
+                });
                 // 停止時も既に投入したバッチはACKまで処理する。上位が停止時間を制限する。
                 processed.await.map_err(|_| EngineError::Worker("配送処理が停止しました".into()))?;
                 continue;

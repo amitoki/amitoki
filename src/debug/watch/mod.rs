@@ -4,7 +4,7 @@ mod process;
 use super::BlockTestArguments;
 use crate::plugin_manager::{
     source::{absolute_directory, expand_path, PluginTarget},
-    ManagerResult,
+    ManagerResult, PluginStore,
 };
 use changes::Changes;
 use clap::Args;
@@ -56,8 +56,8 @@ struct WatchSession {
     once: bool,
 }
 
-pub async fn watch(arguments: WatchArguments) -> ManagerResult<()> {
-    let mut session = WatchSession::new(arguments)?;
+pub async fn watch(store: &PluginStore, arguments: WatchArguments) -> ManagerResult<()> {
+    let mut session = WatchSession::new(store, arguments)?;
     let shutdown = CancellationToken::new();
     let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -72,12 +72,14 @@ pub async fn watch(arguments: WatchArguments) -> ManagerResult<()> {
     }
 }
 impl WatchSession {
-    fn new(arguments: WatchArguments) -> ManagerResult<Self> {
+    fn new(store: &PluginStore, arguments: WatchArguments) -> ManagerResult<Self> {
         let PluginTarget::Directory(package) = PluginTarget::parse(&arguments.test.target)? else {
             return Err("watchにはローカルの配布ディレクトリを指定してください".into());
         };
         let mut paths = if arguments.paths.is_empty() { vec![package.clone()] } else { arguments.paths };
-        paths.push(arguments.test.pcap.clone());
+        if let Some(pcap) = &arguments.test.pcap {
+            paths.push(pcap.clone());
+        }
         let paths = paths.iter().map(|path| expand_path(path)?.canonicalize().map_err(Into::into)).collect::<ManagerResult<Vec<_>>>()?;
         let mut excluded = arguments.excluded.iter().map(|path| absolute_directory(&expand_path(path)?)).collect::<ManagerResult<Vec<_>>>()?;
         if arguments.build.is_some() {
@@ -99,8 +101,11 @@ impl WatchSession {
                 })
             })
             .transpose()?;
+        let mut test = test_command(&arguments.test, &package, timeout)?;
+        // --generatorの登録名を、親CLIと同じストアで解決する。
+        test.arguments.splice(1..1, ["--directory".into(), absolute_directory(&store.directory)?.into_os_string()]);
         Ok(Self {
-            test: test_command(&arguments.test, &package, timeout)?,
+            test,
             build,
             changes,
             debounce: Duration::from_millis(arguments.debounce_ms),
@@ -148,12 +153,30 @@ fn test_command(test: &BlockTestArguments, package: &Path, timeout: Duration) ->
     let mut arguments: Vec<OsString> = ["plugin", "block", "test"].into_iter().map(Into::into).collect();
     arguments.push(package.into());
     for (flag, value) in [
-        ("--pcap", expand_path(&test.pcap)?.into_os_string()),
         ("--node-id", test.node_id.clone().into()),
         ("--channel", test.channel.clone().into()),
         ("--instance", test.instance.clone().into()),
     ] {
         arguments.extend([flag.into(), value]);
+    }
+    if let Some(pcap) = &test.pcap {
+        arguments.extend(["--pcap".into(), expand_path(pcap)?.into_os_string()]);
+    }
+    if let Some(packet) = &test.packet {
+        arguments.extend([
+            "--packet".into(),
+            packet.into(),
+            "--count".into(),
+            test.count.to_string().into(),
+            "--seed".into(),
+            test.seed.to_string().into(),
+        ]);
+    }
+    if let Some(generator) = &test.generator {
+        arguments.extend(["--generator".into(), generator.into()]);
+    }
+    for assignment in &test.packet_assignments {
+        arguments.extend(["--packet-set".into(), assignment.into()]);
     }
     for assignment in &test.assignments {
         arguments.extend(["--set".into(), assignment.into()]);
