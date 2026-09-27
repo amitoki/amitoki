@@ -29,11 +29,18 @@ def publish(directory, tag, repository):
     (directory / "SHA256SUMS").write_text(checksums)
     assets = [directory / name for target in TARGETS for name in filenames(version(), target)]
     assets.append(directory / "SHA256SUMS")
+    expected = {path.name: f"sha256:{digest(path)}" for path in assets}
     base = ["gh", "release"]
-    existing = subprocess.run([*base, "view", tag, "--repo", repository, "--json", "isDraft"], capture_output=True, text=True)
+    existing = subprocess.run([*base, "view", tag, "--repo", repository, "--json", "isDraft,body,assets"], capture_output=True, text=True)
     if existing.returncode == 0:
-        if not json.loads(existing.stdout)["isDraft"]:
-            raise ValueError("公開済みReleaseは上書きしません")
+        release = json.loads(existing.stdout)
+        if not release["isDraft"]:
+            uploaded = {asset["name"]: asset["digest"] for asset in release["assets"]}
+            if uploaded != expected or release["body"].strip() != notes.read_text().strip():
+                raise ValueError("公開済みReleaseと内容が違います。上書きしません")
+            # 公開後の取得検証だけが失敗した場合、同じCIを再実行できる。
+            print("同一内容のReleaseは公開済みです。変更せず公開後の検証へ進みます")
+            return
         # 途中で失敗した自分のdraftにだけ再アップロードできる。
         subprocess.run([*base, "edit", tag, "--repo", repository, "--title", tag, "--notes-file", str(notes)], check=True)
     else:
@@ -42,7 +49,6 @@ def publish(directory, tag, repository):
     # GitHubが返すdigestも照合してから公開し、部分的なアップロードを公開しない。
     # タグ指定のREST APIはdraftを返さない。CLIはdraftも解決して取得する。
     release = json.loads(output(*base, "view", tag, "--repo", repository, "--json", "assets"))
-    expected = {path.name: f"sha256:{digest(path)}" for path in assets}
     uploaded = {asset["name"]: asset["digest"] for asset in release["assets"]}
     if uploaded != expected:
         raise ValueError("GitHub上の配布物がローカルと一致しません。draftのまま停止します")

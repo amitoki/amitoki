@@ -1,0 +1,49 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '公開する本体版（例: 0.3.0、vは付けない）'
+        required: true
+        type: string
+      dry_run:
+        description: '更新内容を確認するだけで、commit・タグ・公開を変更しない'
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tests/release -v
+      - name: Prepare the version and start its release CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          arguments=()
+          if [ "$RELEASE_DRY_RUN" = true ]; then arguments+=(--dry-run); fi
+          python3 scripts/release/prepare.py --version "$RELEASE_VERSION" \
+            --repository "$RELEASE_REPOSITORY" --summary "$GITHUB_STEP_SUMMARY" "${arguments[@]}"

@@ -22,6 +22,9 @@ class ResumeTests(unittest.TestCase):
     def test_a_failed_publish_can_resume_after_all_validation_jobs_succeed(self):
         resume.verify_build_run(self.run, self.jobs, self.expected)
 
+    def test_an_explicitly_dispatched_tag_can_resume_with_the_same_checks(self):
+        resume.verify_build_run({**self.run, "event": "workflow_dispatch"}, self.jobs, self.expected)
+
     def test_other_sources_or_unfinished_builds_are_rejected(self):
         cases = {"path": "other.yml", "event": "pull_request", "head_branch": "main",
                  "head_sha": "different", "status": "in_progress",

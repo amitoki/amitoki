@@ -82,6 +82,31 @@ ARM64上では`--target aarch64-unknown-linux-gnu`を使う。クロスビルド
 
 ## 管理者が版を公開する
 
+開発PRをmainへマージした後、[Prepare release](https://github.com/amitoki/amitoki/actions/workflows/prepare-release.yml)をmainから実行し、`version`に次の版を指定する。ターミナルからも開始できる。以下は次の版を0.3.0にする例。
+
+```bash
+gh workflow run prepare-release.yml --repo amitoki/amitoki --ref main -f version=0.3.0
+```
+
+本体のCargo.toml/Cargo.lock・インストール例を更新し、注釈タグとmainを一緒にpushする。その後、タグの`CI and release`を明示的に起動する。両CPUの検証・配布物生成・正式公開・匿名ダウンロードによる再検証まで自動で進む。公開結果は`CI and release`の対象タグの実行で確認でき、検証結果のJSONは`published-release-verification` Artifactに残る。`Prepare release`の成功は公開CIの開始を意味する。
+
+`docs/releases/v<版>.md`を事前にmainへ追加してあれば、その文章を使う。なければGitHubの変更履歴から自動生成する。SDK・プラグインの版は変更しない。mainの更新競合や既存タグ、別の版の公開CIが進行中の場合は停止する。個人トークンの登録は不要。mainへの直接pushを禁止する保護ルールがある場合は、ルールを迂回せず失敗する。
+
+実公開せずに確認するには、`dry_run=true`を指定する。生成予定の版と変更対象を表示し、commit・タグ・Releaseは作らない。
+
+```bash
+gh workflow run prepare-release.yml --repo amitoki/amitoki --ref main \
+  -f version=0.3.0 -f dry_run=true
+```
+
+タグ作成後にCIの起動だけ失敗した場合は、そのタグを指定して再開する。タグを作り直す必要はない。
+
+```bash
+gh workflow run rust.yml --repo amitoki/amitoki --ref v0.3.0
+```
+
+## 手元で版を準備する場合
+
 1. `Cargo.toml`の本体版と`docs/releases/v<版>.md`を更新し、PRでCIを通す。SDK・プラグインの版は必要な変更があるときだけ更新する。
 2. 関連する開発PRをmainへ取り込む。mainのCI成功と両CPUの配布物を確認する。
 3. クリーンなmainで版タグを作成してpushする。
@@ -95,7 +120,7 @@ git tag -a v0.2.0 -m 'amitoki 0.2.0を公開'
 git push origin v0.2.0
 ```
 
-タグのCIは再度ビルド・テストし、draftのReleaseへ4配布物と`SHA256SUMS`をアップロードする。GitHub上のファイル名・SHA256が全部一致したら公開する。途中で失敗したdraftは、原因を修正したうえで同じワークフローを再実行できる。公開済み版は上書きしない。コード修正が必要なら新しい版を作る。
+タグのCIは再度ビルド・テストし、draftのReleaseへ4配布物と`SHA256SUMS`をアップロードする。GitHub上のファイル名・SHA256が全部一致したら公開し、認証なしで取得して版・CPU・commit・SHA256・リリースノートを確認する。途中で失敗したdraftは、原因を修正したうえで同じワークフローを再実行できる。公開済み版は上書きせず、配布物とノートが完全に一致する場合だけ再確認へ進む。コード修正が必要なら新しい版を作る。
 
 公開スクリプトに不具合があった場合は、mainで修正して`Resume verified release`を実行する。既存タグのCIで静的チェック・ネットワーク試験・両CPUのテストと配布物生成が成功していることを確認し、そのArtifactを使って公開だけを再開する。タグと配布物は変更しない。Artifactの保存期間は14日。
 
@@ -106,4 +131,4 @@ gh workflow run publish-release.yml --repo amitoki/amitoki --ref main \
 
 再開時はタグのソースへmainの検証・公開スクリプトを適用する。本体版・リリースノートはタグから読み、配布物のcommitがタグと一致することと、タグがmainに含まれることを再検証する。公開済みReleaseは再開でも上書きしない。
 
-`CI and release`の通常ブランチへのpushや手動実行ではReleaseを公開しない。ActionsのRun workflowからタグ作成前の配布物を作れる。
+`CI and release`の通常ブランチへのpushや、ブランチを指定した手動実行ではReleaseを公開しない。`v`で始まる版タグを指定した手動実行は公開まで進む。これは`GITHUB_TOKEN`で作ったタグのpushが別CIを起動しないためで、Prepare releaseからの連携にも使う（[GitHub公式の起動仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)）。

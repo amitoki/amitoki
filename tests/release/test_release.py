@@ -75,11 +75,26 @@ class PublishingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, \
                 patch.object(publish, "release_preflight", return_value=("commit", Path("notes"))), \
                 patch.object(publish, "verify_target", return_value=""), \
-                patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":false}')) as run:
+                patch.object(publish, "digest", return_value="hash"), \
+                patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, '{"isDraft":false,"assets":[]}')) as run:
             with self.assertRaisesRegex(ValueError, "公開済み"):
                 publish.publish(Path(temporary), f"v{metadata.version()}", "example/repository")
             self.assertEqual(run.call_count, 1)
             self.assertEqual(run.call_args.args[0][:3], ["gh", "release", "view"])
+
+    def test_an_identical_published_release_is_not_modified_on_retry(self):
+        names = [name for target in metadata.TARGETS for name in metadata.filenames(metadata.version(), target)] + ["SHA256SUMS"]
+        published = {"isDraft": False, "body": "release notes", "assets": [{"name": name, "digest": "sha256:hash"} for name in names]}
+        with tempfile.TemporaryDirectory() as temporary:
+            notes = Path(temporary) / "notes.md"
+            notes.write_text("release notes\n")
+            with patch.object(publish, "release_preflight", return_value=("commit", notes)), \
+                    patch.object(publish, "verify_target", return_value=""), \
+                    patch.object(publish, "digest", return_value="hash"), \
+                    patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(published))) as run:
+                publish.publish(Path(temporary), f"v{metadata.version()}", "example/repository")
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(run.call_args.args[0][:3], ["gh", "release", "view"])
 
     def test_incomplete_upload_remains_a_draft(self):
         with tempfile.TemporaryDirectory() as temporary, \
