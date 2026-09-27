@@ -53,6 +53,9 @@ PY
   PGPASSWORD="$AMITOKI_LAB_PASSWORD" psql -h 127.0.0.1 -U amitoki -d amitoki -v ON_ERROR_STOP=1 -f schema.sql
 fi
 install -m 644 amitoki.service amitoki-network.service /etc/systemd/system/
+# 本体の4MiB要求が既定の208KiBに制限されないよう、VMラボ内だけで上限を設定する。
+printf 'net.core.rmem_max=4194304\n' > /etc/sysctl.d/90-amitoki-lab.conf
+sysctl -p /etc/sysctl.d/90-amitoki-lab.conf >/dev/null
 systemctl daemon-reload
 systemctl enable --now amitoki-network.service amitoki.service
 printf 'VM %s: 中継を配備しました\n' "$node"

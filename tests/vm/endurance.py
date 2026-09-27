@@ -14,10 +14,11 @@ from settings import NODES, ROOT
 MIN_DURATION_SECONDS = 60
 PROGRESS_INTERVAL_SECONDS = 20
 CLIENT_TARGETS = {"a": "192.0.2.12", "b": "192.0.2.13", "c": "192.0.2.11"}
-SAMPLE_COMMAND = """sudo python3 - <<'PY'
+SAMPLE_COMMAND = r"""sudo python3 - <<'PY'
 import json
 from pathlib import Path
 import subprocess
+import re
 pid = int(subprocess.check_output(['systemctl','show','amitoki','--property=MainPID','--value'], text=True))
 if pid <= 0:
     raise RuntimeError('amitoki service is stopped')
@@ -26,15 +27,21 @@ def process_tree(pid):
     rss = int(next(line.split()[1] for line in status if line.startswith('VmRSS:')))
     children = {int(child) for task in Path(f'/proc/{pid}/task').iterdir() for child in (task/'children').read_text().split()}
     return rss + sum(process_tree(child) for child in children)
-print(json.dumps({'pid':pid, 'rss_with_plugins_kib':process_tree(pid)}))
+socket_stats = subprocess.check_output(['ss','--packet','-am'], text=True)
+relay_stats = next(line for line in socket_stats.splitlines() if ':relay0' in line)
+drops = int(re.search(r',d(\d+)\)', relay_stats).group(1))
+print(json.dumps({'pid':pid, 'rss_with_plugins_kib':process_tree(pid), 'packet_socket_drops':drops}))
 PY"""
 
 
 def exercise(node):
     target = CLIENT_TARGETS[node]
     started = time.monotonic()
-    tcp = json.loads(remote.run(node, f"{scenarios.PROBE} tcp {target}").stdout)
-    udp = json.loads(remote.run(node, f"{scenarios.PROBE} udp {target} {uuid.uuid4().hex}").stdout)
+    try:
+        tcp = json.loads(remote.run(node, f"{scenarios.PROBE} tcp {target}").stdout)
+        udp = json.loads(remote.run(node, f"{scenarios.PROBE} udp {target} {uuid.uuid4().hex}").stdout)
+    except Exception as error:
+        raise RuntimeError(f"{node}→{target}の通信検証に失敗: {type(error).__name__}") from error
     status = json.loads(remote.run(node, SAMPLE_COMMAND).stdout)
     return {"node": node, "target": target, "cycle_seconds": time.monotonic() - started,
             "tcp": tcp, "udp_packets_verified": len(udp), **status}
@@ -86,13 +93,17 @@ def run(duration, fault):
         if fault == "postgres":
             if not fault_recovered or not any(sample["postgres_stopped"] for sample in report["samples"]):
                 raise RuntimeError("障害中と復旧後の検証が完了していません")
-            # P2Pだけで成功し続けている状態と区別して、DB自身の復旧を確認する。
+            # PostgreSQLの占有ロック消失は恒久エラー。通信継続の検証後に明示的に再起動する。
+            for node in NODES:
+                remote.run(node, "sudo systemctl restart amitoki")
             scenarios.wait_for(lambda: scenarios.database_count("SELECT count(*) FROM stegrdb_relay.pending WHERE channel='vm-lab'") == 0,
                                "復旧したPostgreSQLの配送待ちが解消しません")
+            scenarios.check_connectivity()
+            report["recovery_required_core_restart"] = True
             report["postgres_backlog_drained"] = True
         report["status"] = "passed"
     except BaseException as error:
-        report["error"] = type(error).__name__
+        report["error"] = str(error)
         raise
     finally:
         try:
