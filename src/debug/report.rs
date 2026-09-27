@@ -27,6 +27,15 @@ pub struct BlockStep {
     pub annotations: Value,
     pub error: Option<String>,
     pub elapsed_us: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rewrite: Option<RewriteReport>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RewriteReport {
+    pub length: usize,
+    pub sha256: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -74,6 +83,9 @@ impl PacketReport {
                 writeln!(writer, "    {} → {}", route.port, target)?;
             }
             writeln!(writer, "    解析結果: {}", step.annotations)?;
+            if let Some(rewrite) = &step.rewrite {
+                writeln!(writer, "    加工後: {} bytes / sha256={}", rewrite.length, rewrite.sha256)?;
+            }
         }
         if let Some(error) = &self.error {
             writeln!(writer, "  停止: {error}")?;

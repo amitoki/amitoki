@@ -43,6 +43,7 @@ async fn three_nodes_forward_full_mtu_frames_without_recapturing_injected_traffi
             .await
             .unwrap();
         let network = Arc::new(LinuxSocket::open(&format!("relay-{node}"), true).unwrap());
+        network.set_receive_buffer(EngineConfig::default().capture_buffer_bytes).unwrap();
         let settings = EngineSettings {
             firewall: Firewall {
                 policy: Policy::Whitelist,

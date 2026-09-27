@@ -3,6 +3,10 @@ use std::time::Duration;
 
 // Ethernetの最大長でも約64MiB以内に収まる送信待ち件数。
 const DEFAULT_QUEUE_CAPACITY: usize = 1024;
+// 短いTCPバーストをカーネルで受け止める。実際の上限はnet.core.rmem_maxにも制限される。
+const DEFAULT_CAPTURE_BUFFER_BYTES: usize = 4 * 1024 * 1024;
+const MIN_CAPTURE_BUFFER_BYTES: usize = 64 * 1024;
+const MAX_CAPTURE_BUFFER_BYTES: usize = 64 * 1024 * 1024;
 // 小パケットをまとめ、SQL往復回数と待ち時間の両方を抑える。
 const DEFAULT_BATCH_SIZE: usize = 128;
 const DEFAULT_FLUSH_INTERVAL_MS: u64 = 10;
@@ -23,6 +27,8 @@ const MAX_INTERVAL_MS: u64 = 300_000;
 #[serde(default, deny_unknown_fields)]
 pub struct EngineConfig {
     pub queue_capacity: usize,
+    pub relay_queue_capacity: usize,
+    pub capture_buffer_bytes: usize,
     pub batch_size: usize,
     pub flush_interval_ms: u64,
     pub poll_interval_ms: u64,
@@ -36,6 +42,8 @@ impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             queue_capacity: DEFAULT_QUEUE_CAPACITY,
+            relay_queue_capacity: DEFAULT_QUEUE_CAPACITY,
+            capture_buffer_bytes: DEFAULT_CAPTURE_BUFFER_BYTES,
             batch_size: DEFAULT_BATCH_SIZE,
             flush_interval_ms: DEFAULT_FLUSH_INTERVAL_MS,
             poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
@@ -49,8 +57,14 @@ impl Default for EngineConfig {
 
 impl EngineConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if !(1..=MAX_QUEUE_CAPACITY).contains(&self.queue_capacity) || !(1..=MAX_BATCH_SIZE).contains(&self.batch_size) {
-            return Err("queue_capacityは1〜65536、batch_sizeは1〜4096で指定してください");
+        if !(MIN_CAPTURE_BUFFER_BYTES..=MAX_CAPTURE_BUFFER_BYTES).contains(&self.capture_buffer_bytes) {
+            return Err("capture_buffer_bytesは65536〜67108864で指定してください");
+        }
+        if !(1..=MAX_QUEUE_CAPACITY).contains(&self.queue_capacity)
+            || !(1..=MAX_QUEUE_CAPACITY).contains(&self.relay_queue_capacity)
+            || !(1..=MAX_BATCH_SIZE).contains(&self.batch_size)
+        {
+            return Err("queue_capacityとrelay_queue_capacityは1〜65536、batch_sizeは1〜4096で指定してください");
         }
         let intervals = [
             self.flush_interval_ms,

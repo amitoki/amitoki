@@ -34,6 +34,7 @@ fn manifest() -> PluginManifest {
         protocol_version: PROTOCOL_VERSION,
         description: "EtherTypeによる解析・フィルタの参考実装。空の許可一覧は全通過。".into(),
         block: Some(BlockDefinition {
+            rewrite: false,
             outputs: vec!["pass".into(), "drop".into()],
         }),
         config_schema: json!({"type":"object","additionalProperties":false,"properties":{
@@ -71,6 +72,7 @@ impl Block for Instance {
                 let mut annotations = packet.annotations.clone();
                 annotations[&self.context.instance] = json!({"ether_type":ether_type,"length":bytes.len(),"label":self.options.label});
                 Ok(BlockOutput {
+                    bytes: None,
                     ports: vec![if allowed { "pass" } else { "drop" }.into()],
                     annotations,
                 })

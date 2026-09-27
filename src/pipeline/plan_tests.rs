@@ -12,6 +12,7 @@ impl Block for Annotate {
         Ok(packets
             .iter()
             .map(|packet| BlockOutput {
+                bytes: None,
                 ports: vec!["out".into()],
                 annotations: json!({"allowed":packet.frame.bytes[0]==1,"id":"cannot-change-the-frame-id"}),
             })
@@ -24,6 +25,7 @@ impl Block for Select {
         Ok(packets
             .iter()
             .map(|packet| BlockOutput {
+                bytes: None,
                 ports: if packet.annotations["allowed"] == true { vec!["out".into()] } else { vec![] },
                 annotations: packet.annotations.clone(),
             })
@@ -44,7 +46,10 @@ fn blocks() -> Vec<RunningBlock> {
         .into_iter()
         .map(|block| RunningBlock {
             block,
-            definition: BlockDefinition { outputs: vec!["out".into()] },
+            definition: BlockDefinition {
+                rewrite: false,
+                outputs: vec!["out".into()],
+            },
             on_error: ErrorPolicy::Stop,
         })
         .collect()
@@ -55,6 +60,10 @@ async fn analysis_metadata_can_drive_a_later_filter_without_changing_frame_ident
     let graph = Graph::compile(&config(false), &blocks.iter().map(|block| block.definition.clone()).collect::<Vec<_>>()).unwrap();
     let metrics = PipelineMetrics::default();
     let planner = Planner {
+        firewall: &crate::firewall::Firewall {
+            policy: crate::firewall::Policy::Blacklist,
+            rules: vec![],
+        },
         graph: &graph,
         blocks: &blocks,
         metrics: &metrics,
@@ -71,6 +80,10 @@ async fn reconverging_branches_publish_the_same_frame_once_to_each_terminal() {
     let graph = Graph::compile(&config(true), &blocks.iter().map(|block| block.definition.clone()).collect::<Vec<_>>()).unwrap();
     let metrics = PipelineMetrics::default();
     let planner = Planner {
+        firewall: &crate::firewall::Firewall {
+            policy: crate::firewall::Policy::Blacklist,
+            rules: vec![],
+        },
         graph: &graph,
         blocks: &blocks,
         metrics: &metrics,

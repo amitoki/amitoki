@@ -1,8 +1,8 @@
 //! 各中継の取得は独立させ、受領バッチの処理が終わるまで次を取得しない。
 use super::{generation::Generation, PipelineEngine};
-use crate::engine::EngineError;
+use crate::engine::{retry::retry_operation, EngineError};
 use amitoki_plugin_sdk::wire::MAX_BATCH;
-use amitoki_relay::{Delivery, Frame, RelayError, MAX_FRAME_SIZE};
+use amitoki_relay::{Delivery, Frame, Receipt, RelayError, MAX_FRAME_SIZE};
 use bytes::Bytes;
 use std::{
     sync::{atomic::Ordering, Arc},
@@ -23,8 +23,13 @@ pub(super) enum Job {
         source: usize,
         generation: Arc<Generation>,
         deliveries: Vec<Delivery>,
-        completed: oneshot::Sender<()>,
+        completed: oneshot::Sender<ProcessedBatch>,
     },
+}
+
+pub(super) struct ProcessedBatch {
+    pub receipts: Vec<Receipt>,
+    pub failure: Option<std::io::Error>,
 }
 
 pub(super) async fn capture(engine: Arc<PipelineEngine>, sender: mpsc::Sender<Job>, shutdown: CancellationToken) -> Result<(), EngineError> {
@@ -54,6 +59,19 @@ pub(super) async fn capture(engine: Arc<PipelineEngine>, sender: mpsc::Sender<Jo
 
 pub(super) async fn receive(source: (Arc<PipelineEngine>, usize), sender: mpsc::Sender<Job>, shutdown: CancellationToken) -> Result<(), EngineError> {
     let (engine, index) = source;
+    match receive_batches((&engine, index), sender, shutdown.clone()).await {
+        Err(EngineError::Relay(error)) => {
+            engine.relay_metrics[index].failures.fetch_add(1, Ordering::Relaxed);
+            log::error!("中継の受信を停止します: relay={index} error={error}");
+            shutdown.cancelled().await;
+            Ok(())
+        },
+        outcome => outcome,
+    }
+}
+
+async fn receive_batches(source: (&PipelineEngine, usize), sender: mpsc::Sender<Job>, shutdown: CancellationToken) -> Result<(), EngineError> {
+    let (engine, index) = source;
     let config = &engine.settings.config;
     let limit = config.batch_size.min(MAX_BATCH);
     loop {
@@ -72,14 +90,22 @@ pub(super) async fn receive(source: (Arc<PipelineEngine>, usize), sender: mpsc::
                     _ = shutdown.cancelled() => return Ok(()),
                     permit = sender.reserve() => permit.map_err(|_| EngineError::Worker("入力キューが閉じました".into()))?,
                 };
+                let generation = engine.generations.active();
                 permit.send(Job::Received {
                     source: index,
                     deliveries,
                     completed,
-                    generation: engine.generations.active(),
+                    generation: generation.clone(),
                 });
                 // 停止時も既に投入したバッチはACKまで処理する。上位が停止時間を制限する。
-                processed.await.map_err(|_| EngineError::Worker("配送処理が停止しました".into()))?;
+                let processed = processed.await.map_err(|_| EngineError::Worker("配送処理が停止しました".into()))?;
+                if !processed.receipts.is_empty() {
+                    retry_operation(|| engine.relays[index].acknowledge(&processed.receipts), config, &engine.metrics).await?;
+                }
+                drop(generation);
+                if let Some(error) = processed.failure {
+                    return Err(error.into());
+                }
                 continue;
             },
             Ok(_) => Duration::from_millis(config.poll_interval_ms),

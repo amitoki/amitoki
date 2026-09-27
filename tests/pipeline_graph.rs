@@ -8,6 +8,7 @@ fn configuration(routes: Value) -> PipelineConfig {
 fn definitions() -> Vec<BlockDefinition> {
     vec![
         BlockDefinition {
+            rewrite: false,
             outputs: vec!["pass".into(), "drop".into()]
         };
         2

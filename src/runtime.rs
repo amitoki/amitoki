@@ -33,6 +33,16 @@ impl Runtime {
                 metrics.dropped_branches.load(Ordering::Relaxed),
                 metrics.duplicates.load(Ordering::Relaxed)
             );
+            for (index, relay) in engine.relay_metrics.iter().enumerate() {
+                log::info!(
+                    "中継終了: relay={index} publish={} drop={} queued={} peak_queued={} failure={}",
+                    relay.published.load(Ordering::Relaxed),
+                    relay.dropped.load(Ordering::Relaxed),
+                    relay.queued.load(Ordering::Relaxed),
+                    relay.peak_queued.load(Ordering::Relaxed),
+                    relay.failures.load(Ordering::Relaxed)
+                );
+            }
         }
     }
 }

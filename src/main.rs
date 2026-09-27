@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let control_server = amitoki::control::ControlServer::bind(&path)?;
     let network = Arc::new(LinuxSocket::open(&config.interface, config.promiscuous)?);
+    network.set_receive_buffer(config.engine.capture_buffer_bytes)?;
     // 同じUIDの子から/proc経由で本体のNICを開かせない。プラグインのOS隔離とは別の保護。
     if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
         return Err(std::io::Error::last_os_error().into());

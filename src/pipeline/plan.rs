@@ -11,7 +11,7 @@ use amitoki_plugin_sdk::{
 };
 use amitoki_relay::{Frame, RelayError};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -33,7 +33,11 @@ pub struct PipelineMetrics {
 }
 pub struct Plan {
     pub relays: Vec<Vec<Frame>>,
-    pub inject: Vec<Frame>,
+    pub inject: Vec<Injection>,
+}
+pub struct Injection {
+    pub source: uuid::Uuid,
+    pub frame: Frame,
 }
 struct Input {
     index: usize,
@@ -41,10 +45,11 @@ struct Input {
 }
 struct PendingRoutes {
     blocks: Vec<Vec<Input>>,
-    relay_targets: Vec<HashSet<usize>>,
-    injection_targets: HashSet<usize>,
+    relay_targets: Vec<HashMap<usize, Frame>>,
+    injection_targets: HashMap<usize, Frame>,
 }
 pub(crate) struct Planner<'a> {
+    pub firewall: &'a crate::firewall::Firewall,
     pub graph: &'a Graph,
     pub blocks: &'a [RunningBlock],
     pub metrics: &'a PipelineMetrics,
@@ -54,6 +59,7 @@ pub(crate) struct Planner<'a> {
 impl PipelineEngine {
     pub(super) async fn prepare(&self, generation: &super::generation::Generation, frames: &[Frame], entry: &[Destination]) -> Result<Plan, RelayError> {
         Planner {
+            firewall: &self.settings.firewall,
             graph: &generation.graph,
             blocks: &generation.blocks,
             metrics: &self.pipeline_metrics,
@@ -71,8 +77,8 @@ impl Planner<'_> {
     pub(crate) async fn prepare_traced(&self, frames: &[Frame], entry: &[Destination], mut trace: Option<&mut Vec<BlockTrace>>) -> Result<Plan, RelayError> {
         let mut pending = PendingRoutes {
             blocks: (0..self.blocks.len()).map(|_| Vec::new()).collect(),
-            relay_targets: (0..frames.len()).map(|_| HashSet::new()).collect(),
-            injection_targets: HashSet::new(),
+            relay_targets: (0..frames.len()).map(|_| HashMap::new()).collect(),
+            injection_targets: HashMap::new(),
         };
         for (index, frame) in frames.iter().enumerate() {
             pending.route(
@@ -84,7 +90,7 @@ impl Planner<'_> {
                         annotations: serde_json::json!({}),
                     },
                 },
-            );
+            )?;
         }
         for index in &self.graph.order {
             let inputs = std::mem::take(&mut pending.blocks[*index]);
@@ -93,7 +99,7 @@ impl Planner<'_> {
                     continue;
                 };
                 for (input, output) in batch.iter().zip(outputs) {
-                    pending.apply_output(&self.graph.outputs[*index], input, output)?;
+                    pending.apply_output(&self.graph.outputs[*index], input, (output, &frames[input.index]))?;
                 }
             }
         }
@@ -139,6 +145,9 @@ impl Planner<'_> {
                 }
                 for output in &outputs {
                     output.validate(&block.definition)?;
+                    if let Some(bytes) = &output.bytes {
+                        self.firewall.check_frame(bytes).map_err(|error| RelayError::permanent(format!("加工後のパケットを本体が拒否しました: {error}")))?;
+                    }
                 }
                 Ok(outputs)
             })?;
@@ -147,7 +156,12 @@ impl Planner<'_> {
     }
 }
 impl PendingRoutes {
-    fn apply_output(&mut self, ports: &HashMap<String, Vec<Destination>>, input: &Input, output: BlockOutput) -> Result<(), RelayError> {
+    fn apply_output(&mut self, ports: &HashMap<String, Vec<Destination>>, input: &Input, replacement: (BlockOutput, &Frame)) -> Result<(), RelayError> {
+        let (output, original) = replacement;
+        let frame = match output.bytes {
+            Some(bytes) => super::rewrite::rewritten_frame(original, bytes),
+            None => input.packet.frame.clone(),
+        };
         for port in output.ports {
             let destinations = ports.get(&port).ok_or_else(|| RelayError::permanent("ブロックの出力ポートと経路が一致しません"))?;
             self.route(
@@ -155,15 +169,15 @@ impl PendingRoutes {
                 Input {
                     index: input.index,
                     packet: BlockPacket {
-                        frame: input.packet.frame.clone(),
+                        frame: frame.clone(),
                         annotations: output.annotations.clone(),
                     },
                 },
-            );
+            )?;
         }
         Ok(())
     }
-    fn route(&mut self, destinations: &[Destination], input: Input) {
+    fn route(&mut self, destinations: &[Destination], input: Input) -> Result<(), RelayError> {
         for destination in destinations {
             match destination {
                 Destination::Block(index) => self.blocks[*index].push(Input {
@@ -171,13 +185,24 @@ impl PendingRoutes {
                     packet: input.packet.clone(),
                 }),
                 Destination::Relay(index) => {
-                    self.relay_targets[input.index].insert(*index);
+                    Self::insert_terminal(&mut self.relay_targets[input.index], *index, &input.packet.frame)?;
                 },
                 Destination::Inject => {
-                    self.injection_targets.insert(input.index);
+                    Self::insert_terminal(&mut self.injection_targets, input.index, &input.packet.frame)?;
                 },
             }
         }
+        Ok(())
+    }
+    fn insert_terminal(targets: &mut HashMap<usize, Frame>, index: usize, frame: &Frame) -> Result<(), RelayError> {
+        if let Some(previous) = targets.get(&index) {
+            if previous != frame {
+                return Err(RelayError::permanent("同じ入力の異なる加工結果が同じ終端に合流しています"));
+            }
+        } else {
+            targets.insert(index, frame.clone());
+        }
+        Ok(())
     }
     fn finish(self, frames: &[Frame], relay_count: usize) -> Plan {
         let mut plan = Plan {
@@ -186,11 +211,14 @@ impl PendingRoutes {
         };
         // 終端で合流した同じフレームは1回だけ配送し、入力順を維持する。
         for (index, frame) in frames.iter().enumerate() {
-            for relay in &self.relay_targets[index] {
-                plan.relays[*relay].push(frame.clone());
+            for (relay, outgoing) in &self.relay_targets[index] {
+                plan.relays[*relay].push(outgoing.clone());
             }
-            if self.injection_targets.contains(&index) {
-                plan.inject.push(frame.clone());
+            if let Some(outgoing) = self.injection_targets.get(&index) {
+                plan.inject.push(Injection {
+                    source: frame.id,
+                    frame: outgoing.clone(),
+                });
             }
         }
         plan

@@ -42,7 +42,7 @@ target/release/amitoki plugin stage describe telemetry
 target/release/amitoki plugin stage configure telemetry --set threshold=80
 ```
 
-Stage実装は`amitoki_plugin_sdk::stage::{Stage, StagePlugin, StagePacket, StageOutput}`を使います。パケット本体と配送IDは本体が維持し、Stageは出力ポートとannotationsを返します。パケットの改変・生成を実通信へ挿入するAPIは今回追加していません。生成器はデバッグ専用です。
+Stage実装は`amitoki_plugin_sdk::stage::{Stage, StagePlugin, StagePacket, StageOutput}`を使います。Stageは出力ポートとannotations、加工を宣言した場合は任意のbytesを返します。本体が加工後の検証と配送IDの生成を行います。[加工Stageの例](../plugins/telemetry-rewrite/README.md)を参照してください。生成器はデバッグ専用です。
 
 配布用`plugin.json`は`--describe`のRust定義から`scripts/package-plugin.py`で生成します。パケット生成器はmanifestの`packets`に名前と生成条件のJSON Schemaを公開し、`StagePlugin::generate`で実装します。テスト専用パケット定義を提供する別プラグインを`--generator`で参照することもできます。
 
@@ -87,7 +87,7 @@ SIGHUPも同じ処理を実行します。VM用systemd unitは`systemctl reload 
 4. 旧世代のパケットは旧接続・旧Stageで処理し、配送・ACKが完了するまで旧世代を保持する。
 5. 最後の利用が終わった旧世代のStageを終了する。
 
-パケットを処理途中で新世代へ移しません。配送の再試行でも解析を繰り返しません。既存の共通キューと直列の実行処理を維持するため、旧パケットの配送待ちによる後続の待機も継続します。reloadは配送障害や帯域不足を解消する機能ではありません。
+パケットを処理途中で新世代へ移しません。配送の再試行でも解析を繰り返しません。解析は共通キューで行い、中継ごとの送信キューとACKの再試行は独立しています。旧世代はその世代の送信待ちやACKが終わるまで保持します。停止した中継によって旧世代の保持上限に達した場合、追加のreloadは拒否されます。
 
 コピー・ハッシュ検証はblocking poolで行い、本体の非同期処理を占有しません。初期化が失敗・期限超過した場合は新世代を破棄し、旧世代を継続します。`engine.reload_timeout_ms`は既定30000、最大300000です。旧世代の完了待ちは最大3世代までで、それ以上のreloadは旧世代が完了するまで拒否します。
 

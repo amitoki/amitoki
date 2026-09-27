@@ -1,21 +1,25 @@
-use super::{generation::Generation, sources::Job, PipelineEngine};
-use crate::engine::{retry::retry_operation, EngineError};
+use super::{
+    generation::Generation,
+    publication::RelayQueue,
+    sources::{Job, ProcessedBatch},
+    PipelineEngine,
+};
+use crate::engine::EngineError;
 use amitoki_plugin_sdk::wire::MAX_BATCH;
-use amitoki_relay::{Delivery, Frame};
+use amitoki_relay::Delivery;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 use tokio::{
     sync::mpsc,
-    task::JoinSet,
     time::{sleep, timeout},
 };
 
 use super::history::DeliveryHistory;
 
-pub(super) async fn execute(engine: Arc<PipelineEngine>, mut receiver: mpsc::Receiver<Job>) -> Result<(), EngineError> {
+pub(super) async fn execute(engine: Arc<PipelineEngine>, mut receiver: mpsc::Receiver<Job>, queues: Vec<RelayQueue>) -> Result<(), EngineError> {
     let mut pending = None;
     let mut recent = DeliveryHistory::default();
     loop {
@@ -44,7 +48,13 @@ pub(super) async fn execute(engine: Arc<PipelineEngine>, mut receiver: mpsc::Rec
                         },
                     }
                 }
-                publish((&engine, &generation), &frames).await?;
+                let plan = engine.prepare(&generation, &frames, &generation.graph.capture).await?;
+                for (queue, outgoing) in queues.iter().zip(&plan.relays) {
+                    for frame in outgoing {
+                        recent.nic_seen.insert(frame.id);
+                    }
+                    queue.enqueue(outgoing, &generation);
+                }
                 for frame in &frames {
                     recent.nic_seen.insert(frame.id);
                 }
@@ -56,34 +66,14 @@ pub(super) async fn execute(engine: Arc<PipelineEngine>, mut receiver: mpsc::Rec
                 completed,
                 generation,
             } => {
-                deliver((&engine, &generation, source), deliveries, &mut recent).await?;
-                let _ = completed.send(());
+                let processed = deliver((&engine, &generation, source), deliveries, &mut recent).await?;
+                let _ = completed.send(processed);
             },
         }
     }
 }
 
-async fn publish(context: (&Arc<PipelineEngine>, &Generation), frames: &[Frame]) -> Result<(), EngineError> {
-    let (engine, generation) = context;
-    let plan = engine.prepare(generation, frames, &generation.graph.capture).await?;
-    let mut branches = JoinSet::new();
-    for (index, frames) in plan.relays.into_iter().enumerate() {
-        if frames.is_empty() {
-            continue;
-        }
-        let engine = engine.clone();
-        branches.spawn(async move {
-            // 成功済みの別分岐と解析を繰り返さず、この中継の同じIDだけ再試行する。
-            retry_operation(|| engine.relays[index].publish(&frames), &engine.settings.config, &engine.metrics).await
-        });
-    }
-    while let Some(completed) = branches.join_next().await {
-        completed.map_err(|error| EngineError::Worker(error.to_string()))??;
-    }
-    Ok(())
-}
-
-async fn deliver(source: (&PipelineEngine, &Generation, usize), deliveries: Vec<Delivery>, recent: &mut DeliveryHistory) -> Result<(), EngineError> {
+async fn deliver(source: (&PipelineEngine, &Generation, usize), deliveries: Vec<Delivery>, recent: &mut DeliveryHistory) -> Result<ProcessedBatch, EngineError> {
     let (engine, generation, index) = source;
     let mut batch_ids = HashSet::new();
     let frames: Vec<_> = deliveries
@@ -102,32 +92,28 @@ async fn deliver(source: (&PipelineEngine, &Generation, usize), deliveries: Vec<
         })
         .collect();
     let plan = engine.prepare(generation, &frames, &generation.graph.received[index]).await?;
-    let inject: HashSet<_> = plan.inject.iter().map(|frame| frame.id).collect();
+    let inject: HashMap<_, _> = plan.inject.into_iter().map(|injection| (injection.source, injection.frame)).collect();
     let mut receipts = Vec::new();
     let mut failure = None;
     for delivery in deliveries {
         let frame = &delivery.frame;
-        if inject.contains(&frame.id) && !recent.completed.contains(&(index, frame.id)) {
-            if recent.nic_seen.contains(&frame.id) {
+        if let Some(outgoing) = inject.get(&frame.id).filter(|_| !recent.completed.contains(&(index, frame.id))) {
+            if recent.nic_seen.contains(&outgoing.id) {
                 engine.pipeline_metrics.duplicates.fetch_add(1, Ordering::Relaxed);
             } else {
-                let sent = timeout(engine.settings.config.operation_timeout(), engine.network.send(&frame.bytes))
+                let sent = timeout(engine.settings.config.operation_timeout(), engine.network.send(&outgoing.bytes))
                     .await
                     .unwrap_or_else(|_| Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "NICへの送信がタイムアウトしました")));
                 if let Err(error) = sent {
                     failure = Some(error);
                     break;
                 }
-                recent.nic_seen.insert(frame.id);
+                recent.nic_seen.insert(outgoing.id);
                 engine.metrics.injected.fetch_add(1, Ordering::Relaxed);
             }
         }
         recent.completed.insert((index, frame.id));
         receipts.push(delivery.receipt);
     }
-    // NIC送信・明示的な破棄が済んだものだけACK。ACK再試行で注入と解析は繰り返さない。
-    if !receipts.is_empty() {
-        retry_operation(|| engine.relays[index].acknowledge(&receipts), &engine.settings.config, &engine.metrics).await?;
-    }
-    failure.map_or(Ok(()), |error| Err(error.into()))
+    Ok(ProcessedBatch { receipts, failure })
 }

@@ -44,7 +44,9 @@ def up(relay, pipeline, nodes=NODES):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("up", "test", "reload-test", "status", "ssh", "down", "destroy"))
+    parser.add_argument("action", choices=("up", "test", "reload-test", "endurance", "status", "ssh", "down", "destroy"))
+    parser.add_argument("--duration", type=int, default=300, help="enduranceの実行秒数（60以上）")
+    parser.add_argument("--fault", choices=("none", "postgres"), default="none", help="enduranceで挟む障害")
     parser.add_argument("node", nargs="?", choices=NODES)
     parser.add_argument("--relay", choices=("postgres", "p2p", "both"))
     parser.add_argument("--pipeline", action=argparse.BooleanOptionalAction, default=None, help="解析・フィルタを含むブロック構成で起動")
@@ -66,6 +68,11 @@ def main():
         elif options.action == "reload-test":
             import reload_checks
             reload_checks.run((options.node,) if options.node else NODES)
+        elif options.action == "endurance":
+            if relay != "both" or options.node:
+                parser.error("enduranceは3台の--relay both構成で実行してください")
+            import endurance
+            endurance.run(options.duration, options.fault)
         elif options.action == "status":
             for node in NODES:
                 print(f"{node}: {'running' if qemu.is_running(node) else 'stopped'} (SSH 127.0.0.1:{SSH_PORTS[node]})")

@@ -17,6 +17,34 @@ pub struct LinuxSocket {
 }
 
 impl LinuxSocket {
+    pub fn set_receive_buffer(&self, bytes: usize) -> io::Result<()> {
+        let requested = i32::try_from(bytes).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "受信バッファが大きすぎます"))?;
+        let mut actual = 0_i32;
+        let mut size = mem::size_of_val(&actual) as libc::socklen_t;
+        // SAFETY: SO_RCVBUFに対応するi32の領域と、その実サイズを渡す。
+        unsafe {
+            check_status(libc::setsockopt(
+                self.socket.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_RCVBUF,
+                (&requested as *const i32).cast(),
+                size,
+            ))?;
+            check_status(libc::getsockopt(
+                self.socket.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_RCVBUF,
+                (&mut actual as *mut i32).cast(),
+                &mut size,
+            ))?;
+        }
+        // Linuxは管理用領域を含め、要求量の2倍をSO_RCVBUFとして返す。
+        if i64::from(actual) < i64::from(requested) * 2 {
+            log::warn!("収集バッファはカーネル上限で制限されています: requested={requested} actual={actual}; net.core.rmem_maxを確認してください");
+        }
+        Ok(())
+    }
+
     pub fn open(interface: &str, promiscuous: bool) -> io::Result<Self> {
         let name = CString::new(interface).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "interfaceにNULを含められません"))?;
         // SAFETY: nameはNUL終端し、この呼び出しの間生存する。

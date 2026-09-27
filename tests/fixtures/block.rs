@@ -66,6 +66,7 @@ impl Block for Instance {
                 let mut annotations = annotations.clone();
                 annotations["input"] = packet.annotations.clone();
                 BlockOutput {
+                    bytes: None,
                     ports: if self.mode == "drop" {
                         vec![]
                     } else {
@@ -85,7 +86,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         packets: vec![TelemetryGenerator.definition()],
         protocol_version: PROTOCOL_VERSION,
         description: String::new(),
-        block: Some(BlockDefinition { outputs: vec!["pass".into()] }),
+        block: Some(BlockDefinition {
+            rewrite: false,
+            outputs: vec!["pass".into()],
+        }),
         config_schema: json!({"type":"object","additionalProperties":false,"properties":{"mode":{"type":"string","enum":["pass","drop","delay","crash","capabilities","oversize","invalid","init-fail","init-hang"]}}}),
     };
     if std::env::args().any(|argument| argument == "--describe") {
