@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ startsWith(github.ref, 'refs/tags/') && 'release' || github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
@@ -93,7 +93,7 @@ jobs:
 
   publish:
     name: Publish version tag
-    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [check, package]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -117,3 +117,13 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: python3 scripts/release/publish.py --directory dist/release --tag "$RELEASE_TAG" --repository "$RELEASE_REPOSITORY"
+      - name: Download public assets anonymously and verify the published release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/release/verify_published.py --tag "$RELEASE_TAG" --repository "$RELEASE_REPOSITORY" --directory artifacts/published
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-release-verification
+          path: artifacts/published/verification.json
+          if-no-files-found: error

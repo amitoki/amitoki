@@ -12,7 +12,7 @@ from metadata import ROOT, TARGETS, output
 
 
 def verify_build_run(run, jobs, expected):
-    if (run["path"] != ".github/workflows/rust.yml" or run["event"] != "push"
+    if (run["path"] != ".github/workflows/rust.yml" or run["event"] not in ("push", "workflow_dispatch")
             or run["head_branch"] != expected["tag"] or run["head_sha"] != expected["commit"]
             or run["repository"]["full_name"] != expected["repository"]
             or run["status"] != "completed"):
@@ -59,10 +59,13 @@ def resume_release(tag, run_id, repository):
         subprocess.run(["git", "worktree", "add", "--detach", str(source), commit], cwd=ROOT, check=True)
         try:
             # タグと配布物は固定し、mainで修正した検証・公開スクリプトだけを使う。
-            for name in ("metadata.py", "verify.py", "publish.py"):
+            for name in ("metadata.py", "verify.py", "publish.py", "verify_published.py"):
                 shutil.copyfile(ROOT / "scripts/release" / name, source / "scripts/release" / name)
             subprocess.run([sys.executable, str(source / "scripts/release/publish.py"),
                             "--directory", str(distributions), "--tag", tag,
+                            "--repository", repository], cwd=source, check=True)
+            subprocess.run([sys.executable, str(source / "scripts/release/verify_published.py"),
+                            "--directory", str(directory / "published"), "--tag", tag,
                             "--repository", repository], cwd=source, check=True)
         finally:
             subprocess.run(["git", "worktree", "remove", "--force", str(source)], cwd=ROOT, check=True)
