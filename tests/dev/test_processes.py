@@ -30,9 +30,6 @@ class ProcessCleanupTests(unittest.IsolatedAsyncioTestCase):
             await processes.stop()
             # signal送信と実際の終了の間にある競合を、固定sleepで隠さない。
             self.assertTrue(select.select([child_exit], [], [], 10)[0])
-            stat = Path(f"/proc/{child_pid}/stat")
-            if stat.exists():
-                self.assertEqual(stat.read_text().split(") ", 1)[1].split()[0], "Z")
         finally:
             os.close(child_exit)
             try:

@@ -55,7 +55,11 @@ class LauncherTests(unittest.IsolatedAsyncioTestCase):
         remaining = []
         for pid in self.children:
             stat = Path(f"/proc/{pid}/stat")
-            if stat.exists() and stat.read_text().split(") ", 1)[1].split()[0] != "Z":
+            try:
+                state = stat.read_text().split(") ", 1)[1].split()[0]
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            if state != "Z":
                 remaining.append(pid)
                 try:
                     os.kill(pid, signal.SIGKILL)
