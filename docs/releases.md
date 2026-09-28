@@ -6,17 +6,17 @@
 
 ## 公開版をインストールする
 
-[GitHub Releases](https://github.com/amitoki/amitoki/releases)から、使用するCPUに合うファイルと`SHA256SUMS`を取得する。以下はv0.3.0のインストール例。GitHub CLIを入れたUbuntu/Debianのターミナルで実行する。
+[GitHub Releases](https://github.com/amitoki/amitoki/releases)から、使用するCPUに合うファイルと`SHA256SUMS`を取得する。以下はv0.4.0のインストール例。GitHub CLIを入れたUbuntu/Debianのターミナルで実行する。
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y gh ca-certificates
 mkdir -p amitoki-download
 cd amitoki-download
-gh release download v0.3.0 --repo amitoki/amitoki \
-  --pattern 'amitoki_0.3.0_amd64.deb' --pattern SHA256SUMS
+gh release download v0.4.0 --repo amitoki/amitoki \
+  --pattern 'amitoki_0.4.0_amd64.deb' --pattern SHA256SUMS
 sha256sum --ignore-missing --check SHA256SUMS
-sudo apt-get install -y ./amitoki_0.3.0_amd64.deb
+sudo apt-get install -y ./amitoki_0.4.0_amd64.deb
 amitoki --version
 ```
 
@@ -35,14 +35,14 @@ amitoki --config ./amitoki.toml
 sudo apt-get remove amitoki
 ```
 
-実行ファイルだけを使う場合は、`amitoki-0.3.0-x86_64-unknown-linux-gnu.tar.gz`を取得・SHA256確認して展開する。ARM64では`aarch64-unknown-linux-gnu`を選ぶ。
+実行ファイルだけを使う場合は、`amitoki-0.4.0-x86_64-unknown-linux-gnu.tar.gz`を取得・SHA256確認して展開する。ARM64では`aarch64-unknown-linux-gnu`を選ぶ。
 
 ```bash
-gh release download v0.3.0 --repo amitoki/amitoki \
-  --pattern 'amitoki-0.3.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS --clobber
+gh release download v0.4.0 --repo amitoki/amitoki \
+  --pattern 'amitoki-0.4.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS --clobber
 sha256sum --ignore-missing --check SHA256SUMS
-tar -xzf amitoki-0.3.0-x86_64-unknown-linux-gnu.tar.gz
-./amitoki-0.3.0-x86_64-unknown-linux-gnu/amitoki --version
+tar -xzf amitoki-0.4.0-x86_64-unknown-linux-gnu.tar.gz
+./amitoki-0.4.0-x86_64-unknown-linux-gnu/amitoki --version
 ```
 
 `SHA256SUMS`はファイルの破損・取り違えを検出するためのもの。配布元の真正性はGitHubリポジトリとHTTPSを信頼する。tar.gzの`build-info.json`とdebの`/usr/share/doc/amitoki/build-info.json`でソースcommit・版・CPU・Rust版・本体のSHA256を確認できる。
@@ -82,10 +82,10 @@ ARM64上では`--target aarch64-unknown-linux-gnu`を使う。クロスビルド
 
 ## 管理者が版を公開する
 
-開発PRをmainへマージした後、[Prepare release](https://github.com/amitoki/amitoki/actions/workflows/prepare-release.yml)をmainから実行し、`version`に次の版を指定する。ターミナルからも開始できる。以下は次の版を0.3.0にする例。
+開発PRをmainへマージした後、[Prepare release](https://github.com/amitoki/amitoki/actions/workflows/prepare-release.yml)をmainから実行し、`version`に次の版を指定する。ターミナルからも開始できる。以下は次の版を0.4.0にする例。
 
 ```bash
-gh workflow run prepare-release.yml --repo amitoki/amitoki --ref main -f version=0.3.0
+gh workflow run prepare-release.yml --repo amitoki/amitoki --ref main -f version=0.4.0
 ```
 
 本体のCargo.toml/Cargo.lock・インストール例を更新し、注釈タグとmainを一緒にpushする。その後、タグの`CI and release`を明示的に起動する。両CPUの検証・配布物生成・正式公開・匿名ダウンロードによる再検証まで自動で進む。公開結果は`CI and release`の対象タグの実行で確認でき、検証結果のJSONは`published-release-verification` Artifactに残る。`Prepare release`の成功は公開CIの開始を意味する。
@@ -96,13 +96,13 @@ gh workflow run prepare-release.yml --repo amitoki/amitoki --ref main -f version
 
 ```bash
 gh workflow run prepare-release.yml --repo amitoki/amitoki --ref main \
-  -f version=0.3.0 -f dry_run=true
+  -f version=0.4.0 -f dry_run=true
 ```
 
 タグ作成後にCIの起動だけ失敗した場合は、そのタグを指定して再開する。タグを作り直す必要はない。
 
 ```bash
-gh workflow run rust.yml --repo amitoki/amitoki --ref v0.3.0
+gh workflow run rust.yml --repo amitoki/amitoki --ref v0.4.0
 ```
 
 ## 手元で版を準備する場合
@@ -116,8 +116,8 @@ git switch main
 git pull --ff-only
 git status --short
 # 出力が空であることと、対象commitのCI成功を確認してから実行する。
-git tag -a v0.3.0 -m 'amitoki 0.3.0を公開'
-git push origin v0.3.0
+git tag -a v0.4.0 -m 'amitoki 0.4.0を公開'
+git push origin v0.4.0
 ```
 
 タグのCIは再度ビルド・テストし、draftのReleaseへ4配布物と`SHA256SUMS`をアップロードする。GitHub上のファイル名・SHA256が全部一致したら公開し、認証なしで取得して版・CPU・commit・SHA256・リリースノートを確認する。途中で失敗したdraftは、原因を修正したうえで同じワークフローを再実行できる。公開済み版は上書きせず、配布物とノートが完全に一致する場合だけ再確認へ進む。コード修正が必要なら新しい版を作る。
@@ -126,7 +126,7 @@ git push origin v0.3.0
 
 ```bash
 gh workflow run publish-release.yml --repo amitoki/amitoki --ref main \
-  -f tag=v0.3.0 -f run_id=対象のタグCIのrun_ID
+  -f tag=v0.4.0 -f run_id=対象のタグCIのrun_ID
 ```
 
 再開時はタグのソースへmainの検証・公開スクリプトを適用する。本体版・リリースノートはタグから読み、配布物のcommitがタグと一致することと、タグがmainに含まれることを再検証する。公開済みReleaseは再開でも上書きしない。
