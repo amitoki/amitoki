@@ -14,7 +14,7 @@ Web開発では`uv run scripts/dev.py`でビルド・API・Viteをまとめて�
 
 開発版では中継ごとの送信キュー・ACK待ちを分離し、停止した経路だけを制限する。[パケット加工Stage](plugins/telemetry-rewrite/README.md)と[耐久・障害試験](docs/endurance.md)も利用できる。
 
-[独自L3の実験](experiments/l3/README.md)では、Ethernet上でIPを使わずに期限付きメッセージを送る。短文優先・受信側の送信枠・2経路への複製を、隔離したネットワークで比較できる。
+[L3中継プラグインと比較環境](https://github.com/amitoki/amitoki-plugin-l3)は別リポジトリで開発する。Ethernet上でIPを使わずに、信頼性付き・順序なしの中継を行う。補助プロセスの起動と本体への追加は[導入手順](https://github.com/amitoki/amitoki-plugin-l3/blob/main/docs/plugin.md)を参照する。
 
 Linux向け。本体の実行ファイル・debの入手方法とCIは[インストールとリリース](docs/releases.md)、ソースからのビルドは以下を参照する。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。
 
@@ -40,7 +40,7 @@ cargo build --release --bin amitoki --locked
 
 ## プラグインを追加する
 
-PostgreSQLとP2Pはamitoki Organizationの公開リポジトリで開発し、本体からsubmoduleとして参照する。本体だけのビルド・試験にはsubmoduleの取得は不要。開発・VM試験で使う場合は次で取得する。
+PostgreSQL・P2P・L3はamitoki Organizationの公開リポジトリで開発し、本体からsubmoduleとして参照する。本体だけのビルド・試験にはsubmoduleの取得は不要。開発・VM試験で使う場合は次で取得する。
 
 ```bash
 git submodule update --init --recursive
@@ -68,6 +68,8 @@ git submodule update --init --recursive
 ```
 
 Relayの設定保存・更新・削除は対象の中継を停止してから行う。使用中のRelayへの操作は拒否する。Stageは稼働中に更新でき、reloadで反映する。削除後も設定は保持する。更新は実行ファイルのSHA256、通信仕様、OS・CPU、保存済み設定を検証し、原子的に入れ替える。SHA256は破損検出であり、第三者署名ではない。取得先リポジトリと認証済みHTTPSを信頼境界とする。
+
+L3の開発版は`bash scripts/build-l3.sh`でローカル配布物を作り、`amitoki plugin relay add ./dist/l3`で追加できる。通信には別起動の補助プロセスが必要。[設定・起動・配送契約](https://github.com/amitoki/amitoki-plugin-l3/blob/main/docs/plugin.md)を参照する。
 
 P2Pの鍵作成・接続設定・任意のNext.js接続情報交換サーバは[amitoki-plugin-p2p](https://github.com/amitoki/amitoki-plugin-p2p)のREADMEを参照する。
 

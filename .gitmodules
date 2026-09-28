@@ -4,3 +4,6 @@
 [submodule "plugins/p2p"]
 	path = plugins/p2p
 	url = https://github.com/amitoki/amitoki-plugin-p2p.git
+[submodule "plugins/l3"]
+	path = plugins/l3
+	url = https://github.com/amitoki/amitoki-plugin-l3.git
