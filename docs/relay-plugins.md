@@ -17,7 +17,7 @@ flowchart LR
 
 ## 配布・設定・通信を分ける
 
-開発用の`plugins/postgres`と`plugins/p2p`はamitoki Organizationの公開リポジトリのsubmodule。実行時はGitHub Releaseかローカル配布物からインストールし、開発用のsubmoduleは参照しない。親リポジトリはGitのコミットを固定し、各プラグインは共通SDKのGit revisionとCargo.lockを固定する。
+開発用の`plugins/postgres`・`plugins/p2p`・`plugins/l3`はamitoki Organizationの公開リポジトリのsubmodule。実行時はGitHub Releaseかローカル配布物からインストールし、開発用のsubmoduleは参照しない。親リポジトリはGitのコミットを固定し、各プラグインは共通SDKのGit revisionとCargo.lockを固定する。
 
 配布物の`plugin.json`に名前、バージョン、OS・CPU、実行ファイル名、SHA256、通信仕様、JSON Schemaを持たせる。本体はプラグインごとの設定項目をハードコードしない。設定の型・必須条件・説明・既定値はプラグイン側が定義する。CLIの設定は次回起動時に反映し、実行中の無停止切替は行わない。
 
@@ -95,3 +95,9 @@ WHERE created_at < NOW() - INTERVAL '1 day'
 メモリプラグインは同一プロセス内の検証用で、別マシンへ通信しない。プラグインのインスタンス単位で状態を共有し、規定の4,096フレームで満杯になると再試行可能なエラーを返す。ACK後も重複排除のため保持し、プロセス終了で全データが消える。
 
 中継するLANと、DBなどへ接続するネットワークは分ける。同じインターフェースで全通信を許可すると、中継方式自身の通信を再び取り込む可能性がある。同じL2ネットワークに複数の中継ノードを置く構成も、外部で回り込んだフレームのループを避ける設計が別途必要になる。
+
+## L3は独立した補助プロセスを使う
+
+[amitoki-plugin-l3](https://github.com/amitoki/amitoki-plugin-l3)は、独自L3の配送・時計同期・比較試験を本体から分離したリポジトリ。本体SDKのraw socket権限削除は維持し、通常権限のプラグインからUnixソケットでL3補助プロセスへ接続する。パケットの分割・再構成、UUIDによる重複排除、受付待ちの上限はプラグイン側で管理する。
+
+現在は開発版。ローカル配布物から追加する手順と制約は[導入手順](https://github.com/amitoki/amitoki-plugin-l3/blob/main/docs/plugin.md)を参照する。L3のCI・リリース・ネットワーク試験は別リポジトリで行い、本体のworkspaceへは含めない。

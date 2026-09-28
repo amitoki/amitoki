@@ -10,6 +10,7 @@ __pycache__
 
 plugins/postgres
 plugins/p2p
+plugins/l3
 **/.git
 web/node_modules
 web/dist

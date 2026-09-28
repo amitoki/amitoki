@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/relay", "crates/pipeline", "crates/packet", "crates/plugin-sdk", "plugins/telemetry", "plugins/telemetry-rewrite", "plugins/memory", "plugins/packet-rules"]
-exclude = ["plugins/postgres", "plugins/p2p"]
+exclude = ["plugins/postgres", "plugins/p2p", "plugins/l3"]
 resolver = "2"
 
 [package]
