@@ -12,3 +12,5 @@ __pycache__/
 # 旧名の接続設定も公開しない。
 /stegrdb.toml
 /dist/
+/web/node_modules/
+/web/dist/

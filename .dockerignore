@@ -11,6 +11,8 @@ __pycache__
 plugins/postgres
 plugins/p2p
 **/.git
+web/node_modules
+web/dist
 
 # 旧名の接続設定も公開しない。
 stegrdb.toml

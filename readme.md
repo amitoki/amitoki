@@ -8,6 +8,10 @@ v0.2.0では[Rust Pipeline/Stage・生成テスト・reload](docs/rust-stages-re
 
 種類別CLI、GitHub URL・ディレクトリからの追加、PCAPでの単体テスト・経路トレース・結果比較・変更監視は[プラグイン開発とデバッグ](docs/plugin-development.md)を参照する。
 
+開発版は`amitoki web --config ./amitoki.toml`で[Web UI](docs/web-ui.md)を開ける。PCAP解析、Stageごとの入出力、パイプライン図、本体・Relayの稼働状況をローカルのブラウザに表示する。
+
+Web開発では`uv run scripts/dev.py`でビルド・API・Viteをまとめて起動できる。[必要なツールと起動オプション](docs/web-ui.md#uvでまとめて起動する)を参照する。
+
 開発版では中継ごとの送信キュー・ACK待ちを分離し、停止した経路だけを制限する。[パケット加工Stage](plugins/telemetry-rewrite/README.md)と[耐久・障害試験](docs/endurance.md)も利用できる。
 
 Linux向け。本体の実行ファイル・debの入手方法とCIは[インストールとリリース](docs/releases.md)、ソースからのビルドは以下を参照する。プラグインを追加する場合は[中継プラグインの設計](docs/relay-plugins.md)、変更点と検証範囲は[監査・検証記録](docs/review-2026-09-26.md)を参照する。
@@ -16,7 +20,7 @@ Linux向け。本体の実行ファイル・debの入手方法とCIは[インス
 
 ## ビルドする
 
-Ubuntu/Debianで必要なツールを入れる。Rustの導入方法は[rustup公式](https://rust-lang.github.io/rustup/installation/other.html)に従う。
+Ubuntu/Debianで必要なツールを入れる。Rustの導入方法は[rustup公式](https://rust-lang.github.io/rustup/installation/other.html)に従う。ソースからのビルドにはNode.js 24以降も必要。[Web開発の手順](docs/web-ui.md#開発環境)で準備する。配布バイナリの実行にNode.jsは不要。
 
 ```bash
 sudo apt-get update
@@ -26,6 +30,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profil
 rustup component add rustfmt clippy
 git clone https://github.com/amitoki/amitoki.git
 cd amitoki
+bash scripts/build-web.sh
 cargo build --release --bin amitoki --locked
 ```
 

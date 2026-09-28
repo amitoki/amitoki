@@ -11,6 +11,7 @@ authors = ["相田 優希 <51500566+aida0710@users.noreply.github.com>"]
 edition = "2021"
 
 [dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio", "query"] }
 async-trait = "0.1"
 bytes = "1"
 uuid = { version = "1", features = ["v4"] }

@@ -20,6 +20,8 @@ const CONTROL_IO_TIMEOUT: Duration = Duration::from_secs(5);
 // 本体の最大reload_timeout（300秒）に応答転送の余裕を加える。
 const RELOAD_RESPONSE_TIMEOUT: Duration = Duration::from_secs(310);
 const MAX_RESPONSE_BYTES: u64 = 8192;
+// 最大構成の経路一覧を含む状態応答だけは1MiBまで許可する。
+const MAX_STATUS_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct Reply {
@@ -85,16 +87,31 @@ async fn serve(mut stream: UnixStream, reloader: &Reloader) -> ManagerResult<()>
     }
     let mut request = [0; 7];
     tokio::time::timeout(CONTROL_IO_TIMEOUT, stream.read_exact(&mut request)).await??;
-    if &request != b"reload\n" {
-        return Err("制御要求が不正です".into());
-    }
-    let reply = report(reloader.reload().await);
-    let bytes = serde_json::to_vec(&reply)?;
-    if bytes.len() as u64 > MAX_RESPONSE_BYTES {
-        return Err("reload応答が上限を超えました。ログを確認してください".into());
+    let (bytes, limit) = match &request {
+        b"reload\n" => (serde_json::to_vec(&report(reloader.reload().await))?, MAX_RESPONSE_BYTES),
+        b"status\n" => (serde_json::to_vec(&reloader.status()?)?, MAX_STATUS_BYTES),
+        _ => return Err("制御要求が不正です".into()),
+    };
+    if bytes.len() as u64 > limit {
+        return Err("制御応答が上限を超えました。ログを確認してください".into());
     }
     tokio::time::timeout(CONTROL_IO_TIMEOUT, stream.write_all(&bytes)).await??;
     Ok(())
+}
+
+pub async fn status(config: &Path) -> Result<crate::observation::Status, String> {
+    let path = socket::path(config).map_err(|error| error.to_string())?;
+    let request = async {
+        let mut stream = UnixStream::connect(path).await?;
+        stream.write_all(b"status\n").await?;
+        let mut bytes = Vec::new();
+        stream.take(MAX_STATUS_BYTES + 1).read_to_end(&mut bytes).await?;
+        if bytes.len() as u64 > MAX_STATUS_BYTES {
+            return Err(std::io::Error::other("観測情報が上限を超えています"));
+        }
+        serde_json::from_slice(&bytes).map_err(std::io::Error::other)
+    };
+    tokio::time::timeout(CONTROL_IO_TIMEOUT, request).await.map_err(|_| "観測情報の取得がタイムアウトしました".to_owned())?.map_err(|error| error.to_string())
 }
 
 #[derive(Parser)]

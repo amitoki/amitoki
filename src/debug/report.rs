@@ -17,11 +17,17 @@ pub struct PacketReport {
     pub steps: Vec<BlockStep>,
     pub terminals: Vec<String>,
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<super::snapshot::PacketSnapshot>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct BlockStep {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<super::snapshot::PacketSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<super::snapshot::PacketSnapshot>,
     pub block: String,
     pub ports: Vec<PortRoute>,
     pub annotations: Value,
@@ -57,6 +63,7 @@ impl PacketReport {
             steps: Vec::new(),
             terminals: Vec::new(),
             error: None,
+            input: None,
         }
     }
 

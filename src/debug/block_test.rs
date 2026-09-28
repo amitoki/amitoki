@@ -17,6 +17,8 @@ pub async fn test_block(store: &PluginStore, arguments: BlockTestArguments) -> M
             pcap: expand_path(pcap)?,
             source: arguments.instance.clone(),
             json: arguments.json,
+            inspect: false,
+            limit: None,
         })?;
         return plan.run(reader).await;
     }

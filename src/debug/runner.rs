@@ -20,6 +20,8 @@ pub(super) struct ReplayInput {
     pub pcap: PathBuf,
     pub source: String,
     pub json: bool,
+    pub inspect: bool,
+    pub limit: Option<u64>,
 }
 
 pub(super) struct ReplayReader {
@@ -36,11 +38,17 @@ impl ReplayReader {
         })
     }
     pub fn next(&mut self) -> ManagerResult<Option<(CapturePacket, PacketReport)>> {
+        if self.input.limit.is_some_and(|limit| self.packet >= limit) {
+            return Ok(None);
+        }
         let Some(capture) = self.capture.next_packet()? else {
             return Ok(None);
         };
         self.packet += 1;
-        let report = PacketReport::new(self.packet, &self.input.source, &capture);
+        let mut report = PacketReport::new(self.packet, &self.input.source, &capture);
+        if self.input.inspect {
+            report.input = Some(super::snapshot::PacketSnapshot::new(&capture.bytes, serde_json::json!({})));
+        }
         Ok(Some((capture, report)))
     }
     pub fn write(&self, report: &PacketReport) -> ManagerResult<()> {
@@ -97,7 +105,7 @@ impl ReplayPlan {
         };
         let mut trace = Vec::new();
         let outcome = planner.prepare_traced(&[frame], &self.entry, Some(&mut trace)).await;
-        report.steps = trace.into_iter().map(|event| self.step(event)).collect();
+        report.steps = trace.into_iter().map(|event| self.step(event, report.input.is_some())).collect();
         match &outcome {
             Ok(plan) => {
                 for (name, frames) in self.relay_names.iter().zip(&plan.relays) {
@@ -115,7 +123,7 @@ impl ReplayPlan {
         Ok(())
     }
 
-    fn step(&self, event: BlockTrace) -> BlockStep {
+    fn step(&self, event: BlockTrace, inspect: bool) -> BlockStep {
         debug_assert_eq!(event.packet, 0);
         let mut step = BlockStep {
             block: self.block_names[event.block].clone(),
@@ -124,9 +132,15 @@ impl ReplayPlan {
             elapsed_us: event.elapsed_us,
             error: None,
             rewrite: None,
+            input: inspect.then(|| super::snapshot::PacketSnapshot::new(&event.input.frame.bytes, event.input.annotations.clone())),
+            output: None,
         };
         match event.output {
             Ok(output) => {
+                if inspect && !output.ports.is_empty() {
+                    let bytes = output.bytes.as_deref().unwrap_or(&event.input.frame.bytes);
+                    step.output = Some(super::snapshot::PacketSnapshot::new(bytes, output.annotations.clone()));
+                }
                 if let Some(bytes) = &output.bytes {
                     use sha2::{Digest, Sha256};
                     step.rewrite = Some(super::report::RewriteReport {

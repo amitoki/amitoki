@@ -16,12 +16,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  web:
+    name: Build React Web UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: |
+          npm ci
+          npm run format:check
+          npm run build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-dist
+          path: web/dist/
+          if-no-files-found: error
+
   check:
     name: Lint and isolated network tests
+    needs: [web]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: web-dist
+          path: web/dist/
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -35,6 +62,7 @@ jobs:
 
   package:
     name: Test and package (${{ matrix.target }})
+    needs: [web]
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +75,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: web-dist
+          path: web/dist/
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -59,6 +91,31 @@ jobs:
       - run: bash scripts/build-telemetry.sh
       - run: bash scripts/build-telemetry-rewrite.sh
       - run: python3 scripts/check-telemetry-rewrite.py
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Verify the embedded Web UI in Chromium
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm test
+          AMITOKI_WEB_ARTIFACTS=artifacts/web/dev npm run test:dev
+      - name: Verify development launcher lifecycle
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        env:
+          AMITOKI_DEV_BINARY: target/release/amitoki
+        run: python3 -m unittest discover -s tests/dev -v
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always() && matrix.target == 'x86_64-unknown-linux-gnu'
+        with:
+          name: web-ui-verification
+          path: artifacts/web/
+          if-no-files-found: ignore
       - name: Exercise Rust Pipeline and generated packets
         run: |
           cargo run --locked --example pipeline -- /tmp/amitoki-pipeline.json
