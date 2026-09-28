@@ -56,8 +56,19 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: bash scripts/test-network.sh
+      - name: Exercise experimental L3 over isolated Ethernet links
+        env:
+          L3_REPETITIONS: 1
+          L3_DURATION_MS: 1000
+        run: bash scripts/test-l3.sh artifacts/l3/ci
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: l3-network-verification
+          path: artifacts/l3/ci/
+          if-no-files-found: ignore
       - run: python3 -m unittest discover -s tests/release -v
-      - run: python3 -m py_compile tests/vm/*.py tests/vm/guest/*.py scripts/*.py scripts/release/*.py
+      - run: python3 -m py_compile tests/vm/*.py tests/vm/guest/*.py scripts/*.py scripts/release/*.py experiments/l3/lab/*.py
       - run: bash -n scripts/vm-lab scripts/*.sh tests/vm/guest/*.sh
 
   package:

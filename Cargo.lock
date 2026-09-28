@@ -82,6 +82,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "amitoki-l3-lab"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "libc",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "amitoki-packet"
 version = "0.1.0"
 dependencies = [
