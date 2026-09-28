@@ -21,4 +21,4 @@ docker run --rm --name "$container_name" --network none --cap-add NET_ADMIN --ca
   --env "L3_OWNER_UID=$(id -u)" --env "L3_OWNER_GID=$(id -g)" \
   amitoki-l3-test:local python3 /work/experiments/l3/lab/run.py \
   --binary /work/target/release/amitoki-l3 --directory /results \
-  --repetitions "${L3_REPETITIONS:-3}" --duration-ms "${L3_DURATION_MS:-3000}"
+  --repetitions "${L3_REPETITIONS:-3}" --duration-ms "${L3_DURATION_MS:-3000}" --suite "${L3_SUITE:-all}"
